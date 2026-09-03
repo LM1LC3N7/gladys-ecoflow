@@ -12,7 +12,7 @@
 #   - multi-arch image (linux/amd64 + linux/arm64), see the build workflow
 # -----------------------------------------------------------------------------
 
-FROM node:22-alpine
+FROM node:26-alpine
 
 # dumb-init: correct PID 1 signal handling (SIGTERM) for a graceful shutdown.
 RUN apk add --no-cache dumb-init
