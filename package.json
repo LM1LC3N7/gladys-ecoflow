@@ -1,0 +1,30 @@
+{
+  "name": "gladys-ecoflow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Gladys Assistant external integration to monitor and control EcoFlow power stations (River 2 and the wider River/Delta family) through EcoFlow's official Open Platform API.",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@ecoflow-api/schemas": "^0.7.0",
+    "@gladysassistant/integration-sdk": "^0.13.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.9.1",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.11.0",
+    "prettier": "^3.9.6"
+  },
+  "license": "Apache-2.0"
+}

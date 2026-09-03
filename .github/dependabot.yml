@@ -1,0 +1,47 @@
+# -----------------------------------------------------------------------------
+# Dependabot version updates.
+#
+# Opens a PR by itself when a newer version is available, for the three
+# places this repo pins a version: npm packages, the Dockerfile base image,
+# and the GitHub Actions the workflows use. Every PR runs the full ci.yml
+# suite (lint, `node --test`, a real `docker build`) — see
+# .github/workflows/dependabot-auto-merge.yml for which of these Dependabot
+# then merges on its own once that run is green, and
+# .github/workflows/auto-release.yml for what happens right after (a patch
+# release is cut and its image published automatically).
+# -----------------------------------------------------------------------------
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 5
+    groups:
+      dev-dependencies:
+        dependency-type: 'development'
+    labels:
+      - 'dependencies'
+    commit-message:
+      prefix: 'chore'
+      include: 'scope'
+
+  - package-ecosystem: 'docker'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    labels:
+      - 'dependencies'
+    commit-message:
+      prefix: 'chore'
+      include: 'scope'
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    labels:
+      - 'dependencies'
+    commit-message:
+      prefix: 'chore'
+      include: 'scope'

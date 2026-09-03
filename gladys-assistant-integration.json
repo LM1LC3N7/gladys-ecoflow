@@ -1,0 +1,131 @@
+{
+  "manifest_version": 1,
+  "type": "device",
+  "name": "EcoFlow",
+  "description": {
+    "en": "Monitor and control EcoFlow River 2 power stations via EcoFlow's official Open Platform API.",
+    "fr": "Surveillez et contrôlez les stations EcoFlow River 2 via l'API officielle EcoFlow Open Platform."
+  },
+  "version": "0.1.0",
+  "docker_image": "ghcr.io/lm1lc3n7/gladys-ecoflow:0.1.0",
+  "gladys_version": ">=4.86.1",
+  "cover_image": "https://raw.githubusercontent.com/LM1LC3N7/gladys-ecoflow/main/cover.png",
+  "categories": ["energy"],
+  "transports": ["cloud"],
+  "config_schema": [
+    {
+      "key": "intro",
+      "type": "section",
+      "label": {
+        "en": "EcoFlow Open Platform account",
+        "fr": "Compte EcoFlow Open Platform"
+      },
+      "description": {
+        "en": "EcoFlow devices have no local/LAN control path — even a device that only ever sits on your own WiFi is controlled through EcoFlow's cloud, both by the official app and by this integration (confirmed against EcoFlow's own support stance; the only exception in EcoFlow's whole catalog is the unrelated EZ1 sprinkler-timer-sized unit). Create a free developer account, then an Access Key/Secret Key pair, at the EcoFlow Open Platform below — approval can take about a week. Every device on the account is discovered automatically after saving; there is nothing else to enter.",
+        "fr": "Les appareils EcoFlow n'ont aucun mode de contrôle local/LAN — même un appareil qui ne quitte jamais votre réseau WiFi est piloté via le cloud EcoFlow, aussi bien par l'application officielle que par cette intégration (confirmé par la position officielle d'EcoFlow ; la seule exception dans tout le catalogue EcoFlow est l'EZ1, un minuteur d'arrosage sans rapport). Créez un compte développeur gratuit, puis une paire Access Key/Secret Key, sur l'EcoFlow Open Platform ci-dessous — l'approbation peut prendre environ une semaine. Tous les appareils du compte sont découverts automatiquement après l'enregistrement — rien d'autre à saisir."
+      },
+      "links": [
+        {
+          "url": "https://developer-eu.ecoflow.com/",
+          "label": {
+            "en": "EcoFlow Open Platform (EU)",
+            "fr": "EcoFlow Open Platform (UE)"
+          }
+        },
+        {
+          "url": "https://developer.ecoflow.com/",
+          "label": {
+            "en": "EcoFlow Open Platform (global)",
+            "fr": "EcoFlow Open Platform (international)"
+          }
+        }
+      ]
+    },
+    {
+      "key": "access_key",
+      "type": "secret",
+      "label": {
+        "en": "Access Key",
+        "fr": "Access Key"
+      },
+      "required": true
+    },
+    {
+      "key": "secret_key",
+      "type": "secret",
+      "label": {
+        "en": "Secret Key",
+        "fr": "Secret Key"
+      },
+      "required": true
+    },
+    {
+      "key": "api_host",
+      "type": "select",
+      "label": {
+        "en": "API region",
+        "fr": "Région de l'API"
+      },
+      "description": {
+        "en": "The region your EcoFlow developer account/Access Key was created in.",
+        "fr": "La région dans laquelle votre compte développeur/Access Key EcoFlow a été créé."
+      },
+      "required": false,
+      "default": "https://api-e.ecoflow.com",
+      "options": [
+        {
+          "value": "https://api-e.ecoflow.com",
+          "label": {
+            "en": "Europe",
+            "fr": "Europe"
+          }
+        },
+        {
+          "value": "https://api-a.ecoflow.com",
+          "label": {
+            "en": "Americas / rest of world",
+            "fr": "Amériques / reste du monde"
+          }
+        }
+      ]
+    },
+    {
+      "key": "poll_interval_seconds",
+      "type": "number",
+      "label": {
+        "en": "Refresh interval (s)",
+        "fr": "Intervalle de rafraîchissement (s)"
+      },
+      "description": {
+        "en": "How often each device's telemetry (battery level, power in/out) is re-polled from the EcoFlow Cloud API.",
+        "fr": "Fréquence de rafraîchissement des données de chaque appareil (niveau de batterie, puissance entrante/sortante) auprès de l'API Cloud EcoFlow."
+      },
+      "required": false,
+      "default": 30,
+      "min": 10,
+      "max": 3600
+    }
+  ],
+  "actions": [
+    {
+      "key": "test_connection",
+      "label": {
+        "en": "Test connection",
+        "fr": "Tester la connexion"
+      },
+      "timeout_seconds": 20,
+      "fields": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Power station",
+            "fr": "Station d'énergie"
+          },
+          "required": true
+        }
+      ]
+    }
+  ]
+}

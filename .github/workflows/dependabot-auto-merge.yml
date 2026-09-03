@@ -1,0 +1,59 @@
+# -----------------------------------------------------------------------------
+# Auto-merge Dependabot's PATCH bumps once CI is green — but only for the
+# ecosystems where a patch release genuinely carries no protocol risk: the
+# Dockerfile base image, the GitHub Actions the workflows use, and npm DEV
+# dependencies (eslint/prettier/...). Deliberately NOT auto-merged, at any
+# semver level: @ecoflow-api/rest-client, @ecoflow-api/schemas and
+# @gladysassistant/integration-sdk are pre-1.0 (0.x) — under semver a MINOR
+# release is allowed to break their API, AND this repo's own test suite mocks
+# the EcoFlow client entirely (test-fixtures/), so it cannot catch a real
+# behavior change in those packages the way a real-SDK smoke-import job
+# could. A bad silent bump here would mean this integration sends a wrong
+# command to a real power station — left for a human to review, every time.
+#
+# "CI green" means the full ci.yml suite (lint, `node --test`, a real
+# `docker build`) already passed on this PR. This only flips the "auto-merge"
+# switch — GitHub still waits for every required check before actually
+# merging, and still respects branch protection. Once a Dependabot PR does
+# merge (auto or by hand), .github/workflows/auto-release.yml takes over:
+# it cuts a patch release and publishes the image automatically.
+#
+# Needs "Allow auto-merge" turned on once under the repository's
+# Settings -> General — no workflow file can flip that on its own; without
+# it, `gh pr merge --auto` fails harmlessly and the PR just waits for manual
+# review like any other.
+# -----------------------------------------------------------------------------
+name: Dependabot auto-merge
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: '${{ secrets.GITHUB_TOKEN }}'
+
+      - name: Enable auto-merge for low-risk patch updates
+        if: |
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' && (
+            steps.metadata.outputs.package-ecosystem == 'docker' ||
+            steps.metadata.outputs.package-ecosystem == 'github_actions' ||
+            (
+              steps.metadata.outputs.package-ecosystem == 'npm' &&
+              steps.metadata.outputs.dependency-type == 'direct:development'
+            )
+          )
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge --auto --squash "$PR_URL"
