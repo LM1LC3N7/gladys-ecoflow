@@ -9,11 +9,22 @@
 # then merges on its own once that run is green, and
 # .github/workflows/auto-release.yml for what happens right after (a patch
 # release is cut and its image published automatically).
+#
+# `target-branch: main` is set explicitly on every entry below: this repo's
+# GitHub "default branch" setting is (still, as of this writing) pointed at
+# the initial bootstrap branch rather than `main` (Settings -> General ->
+# Default branch fixes that, but no API available here can do it — same
+# situation, and same fix, as gladys-hydro-quebec's own dependabot.yml), and
+# Dependabot targets the repository's default branch when this key is
+# absent — confirmed by the first two Dependabot PRs this repo ever opened
+# (#1, #2) landing against that branch instead of `main`. Pinning `main`
+# here keeps every future PR correctly aimed regardless of that setting.
 # -----------------------------------------------------------------------------
 version: 2
 updates:
   - package-ecosystem: 'npm'
     directory: '/'
+    target-branch: 'main'
     schedule:
       interval: 'weekly'
     open-pull-requests-limit: 5
@@ -28,6 +39,7 @@ updates:
 
   - package-ecosystem: 'docker'
     directory: '/'
+    target-branch: 'main'
     schedule:
       interval: 'weekly'
     labels:
@@ -38,6 +50,7 @@ updates:
 
   - package-ecosystem: 'github-actions'
     directory: '/'
+    target-branch: 'main'
     schedule:
       interval: 'weekly'
     labels:
