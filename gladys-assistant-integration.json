@@ -3,11 +3,11 @@
   "type": "device",
   "name": "EcoFlow",
   "description": {
-    "en": "Monitor and control EcoFlow River 2 power stations via EcoFlow's official Open Platform API.",
-    "fr": "Surveillez et contrôlez les stations EcoFlow River 2 via l'API officielle EcoFlow Open Platform."
+    "en": "Monitor and control EcoFlow River 2 power stations via the official API or a simple login.",
+    "fr": "Surveillez et contrôlez vos stations EcoFlow River 2 via l'API officielle ou une connexion simple."
   },
-  "version": "0.1.0",
-  "docker_image": "ghcr.io/lm1lc3n7/gladys-ecoflow:0.1.0",
+  "version": "0.2.0",
+  "docker_image": "ghcr.io/lm1lc3n7/gladys-ecoflow:0.2.0",
   "gladys_version": ">=4.86.1",
   "cover_image": "https://raw.githubusercontent.com/LM1LC3N7/gladys-ecoflow/main/cover.png",
   "categories": ["energy"],
@@ -17,12 +17,12 @@
       "key": "intro",
       "type": "section",
       "label": {
-        "en": "EcoFlow Open Platform account",
-        "fr": "Compte EcoFlow Open Platform"
+        "en": "Method 1: Official EcoFlow Open Platform (recommended)",
+        "fr": "Méthode 1 : EcoFlow Open Platform officielle (recommandée)"
       },
       "description": {
-        "en": "EcoFlow devices have no local/LAN control path — even a device that only ever sits on your own WiFi is controlled through EcoFlow's cloud, both by the official app and by this integration (confirmed against EcoFlow's own support stance; the only exception in EcoFlow's whole catalog is the unrelated EZ1 sprinkler-timer-sized unit). Create a free developer account, then an Access Key/Secret Key pair, at the EcoFlow Open Platform below — approval can take about a week. Every device on the account is discovered automatically after saving; there is nothing else to enter.",
-        "fr": "Les appareils EcoFlow n'ont aucun mode de contrôle local/LAN — même un appareil qui ne quitte jamais votre réseau WiFi est piloté via le cloud EcoFlow, aussi bien par l'application officielle que par cette intégration (confirmé par la position officielle d'EcoFlow ; la seule exception dans tout le catalogue EcoFlow est l'EZ1, un minuteur d'arrosage sans rapport). Créez un compte développeur gratuit, puis une paire Access Key/Secret Key, sur l'EcoFlow Open Platform ci-dessous — l'approbation peut prendre environ une semaine. Tous les appareils du compte sont découverts automatiquement après l'enregistrement — rien d'autre à saisir."
+        "en": "EcoFlow devices have no local/LAN control path — even a device that only ever sits on your own WiFi is controlled through EcoFlow's cloud, both by the official app and by this integration (confirmed against EcoFlow's own support stance; the only exception in EcoFlow's whole catalog is the unrelated EZ1 sprinkler-timer-sized unit). Create a free developer account, then an Access Key/Secret Key pair, at the EcoFlow Open Platform below — approval can take about a week. Every device on the account is discovered automatically after saving; there is nothing else to enter. Prefer this method: it is documented and auto-discovers your devices. See Method 2 below for a simpler-to-start, unofficial alternative if you would rather not wait for approval.",
+        "fr": "Les appareils EcoFlow n'ont aucun mode de contrôle local/LAN — même un appareil qui ne quitte jamais votre réseau WiFi est piloté via le cloud EcoFlow, aussi bien par l'application officielle que par cette intégration (confirmé par la position officielle d'EcoFlow ; la seule exception dans tout le catalogue EcoFlow est l'EZ1, un minuteur d'arrosage sans rapport). Créez un compte développeur gratuit, puis une paire Access Key/Secret Key, sur l'EcoFlow Open Platform ci-dessous — l'approbation peut prendre environ une semaine. Tous les appareils du compte sont découverts automatiquement après l'enregistrement — rien d'autre à saisir. Privilégiez cette méthode : elle est documentée et découvre vos appareils automatiquement. Voir la méthode 2 ci-dessous pour une alternative non officielle, plus rapide à démarrer, si vous préférez ne pas attendre l'approbation."
       },
       "links": [
         {
@@ -48,7 +48,7 @@
         "en": "Access Key",
         "fr": "Access Key"
       },
-      "required": true
+      "required": false
     },
     {
       "key": "secret_key",
@@ -57,7 +57,7 @@
         "en": "Secret Key",
         "fr": "Secret Key"
       },
-      "required": true
+      "required": false
     },
     {
       "key": "api_host",
@@ -90,6 +90,58 @@
       ]
     },
     {
+      "key": "intro_private",
+      "type": "section",
+      "label": {
+        "en": "Method 2: Simple login (unofficial, optional)",
+        "fr": "Méthode 2 : connexion simple (non officielle, optionnelle)"
+      },
+      "description": {
+        "en": "No developer account, no approval wait — just the same email and password you use to sign in to the EcoFlow app. Read before using: this uses EcoFlow's internal app endpoints, not the documented Open Platform API — it can change or break without notice, and there is no device auto-discovery with this method, so you must type in each device's serial number yourself (Settings > Device Info in the EcoFlow app, or printed on the unit). Both methods can be used at once; a serial number listed below is always handled through this method even if the same device also appears on an official account configured above.",
+        "fr": "Aucun compte développeur, aucune attente d'approbation — juste le même email et mot de passe que pour vous connecter à l'application EcoFlow. À lire avant utilisation : ceci utilise les points d'accès internes de l'application EcoFlow, pas l'API Open Platform documentée — cela peut changer ou casser sans préavis, et il n'y a pas de découverte automatique des appareils avec cette méthode : vous devez saisir vous-même le numéro de série de chaque appareil (Paramètres > Infos appareil dans l'app EcoFlow, ou imprimé sur l'appareil). Les deux méthodes peuvent être utilisées ensemble ; un numéro de série listé ci-dessous est toujours géré par cette méthode, même si le même appareil apparaît aussi sur un compte officiel configuré plus haut."
+      }
+    },
+    {
+      "key": "private_username",
+      "type": "secret",
+      "label": {
+        "en": "EcoFlow account email",
+        "fr": "Email du compte EcoFlow"
+      },
+      "description": {
+        "en": "The email address you use to sign in to the EcoFlow app.",
+        "fr": "L'adresse email utilisée pour vous connecter à l'application EcoFlow."
+      },
+      "required": false
+    },
+    {
+      "key": "private_password",
+      "type": "secret",
+      "label": {
+        "en": "EcoFlow account password",
+        "fr": "Mot de passe du compte EcoFlow"
+      },
+      "description": {
+        "en": "Stored encrypted by Gladys and never leaves your instance except to talk to EcoFlow.",
+        "fr": "Stocké chiffré par Gladys, il ne quitte jamais votre instance sauf pour parler à EcoFlow."
+      },
+      "required": false
+    },
+    {
+      "key": "private_device_sns",
+      "type": "string",
+      "label": {
+        "en": "Device serial number(s)",
+        "fr": "Numéro(s) de série des appareils"
+      },
+      "description": {
+        "en": "Comma-separated if you have more than one, e.g. \"R331ZEB4HFJC1234,R331ZEB4HFJC5678\". Required for this method — there is no auto-discovery.",
+        "fr": "Séparés par des virgules si vous en avez plusieurs, ex. « R331ZEB4HFJC1234,R331ZEB4HFJC5678 ». Requis pour cette méthode — il n'y a pas de découverte automatique."
+      },
+      "required": false,
+      "default": ""
+    },
+    {
       "key": "poll_interval_seconds",
       "type": "number",
       "label": {
@@ -97,8 +149,8 @@
         "fr": "Intervalle de rafraîchissement (s)"
       },
       "description": {
-        "en": "How often each device's telemetry (battery level, power in/out) is re-polled from the EcoFlow Cloud API.",
-        "fr": "Fréquence de rafraîchissement des données de chaque appareil (niveau de batterie, puissance entrante/sortante) auprès de l'API Cloud EcoFlow."
+        "en": "How often each device's telemetry (battery level, power in/out) is re-polled, through whichever method it uses.",
+        "fr": "Fréquence de rafraîchissement des données de chaque appareil (niveau de batterie, puissance entrante/sortante), via la méthode utilisée pour cet appareil."
       },
       "required": false,
       "default": 30,

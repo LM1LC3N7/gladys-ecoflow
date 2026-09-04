@@ -68,12 +68,35 @@ test('section fields are purely presentational', () => {
   }
 });
 
-test('access_key/secret_key are required secrets', () => {
+test('access_key/secret_key are secrets, and optional (either onboarding method can be used alone)', () => {
   for (const key of ['access_key', 'secret_key']) {
     const field = manifest.config_schema.find((f) => f.key === key);
     assert.equal(field.type, 'secret', `"${key}" must be a secret field`);
-    assert.equal(field.required, true, `"${key}" must be required`);
+    assert.equal(field.required, false, `"${key}" must not be required`);
   }
+});
+
+test('private_username/private_password are secrets, and optional', () => {
+  for (const key of ['private_username', 'private_password']) {
+    const field = manifest.config_schema.find((f) => f.key === key);
+    assert.equal(field.type, 'secret', `"${key}" must be a secret field`);
+    assert.equal(field.required, false, `"${key}" must not be required`);
+  }
+});
+
+test('private_device_sns is a plain, optional string field', () => {
+  const field = manifest.config_schema.find((f) => f.key === 'private_device_sns');
+  assert.equal(field.type, 'string');
+  assert.equal(field.required, false);
+});
+
+test('the manifest carries both onboarding-method sections', () => {
+  const sections = manifest.config_schema.filter((f) => f.type === 'section');
+  assert.equal(sections.length, 2);
+  assert.deepEqual(
+    sections.map((s) => s.key),
+    ['intro', 'intro_private'],
+  );
 });
 
 test('api_host options exactly match src/config.js#VALID_API_HOSTS', () => {

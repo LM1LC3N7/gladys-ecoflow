@@ -1,124 +1,123 @@
 // -----------------------------------------------------------------------------
-// These tests exercise src/ecoflow/client.js against a fake RestClient
-// (test-fixtures/fakeEcoflowClient.js) — no network access needed — and, for
-// the set* commands, additionally re-validate the `params` sent against
-// @ecoflow-api/schemas' OWN zod schemas for the River 2 Pro command shapes
-// (`.shape.params`, not the full schema — every one of these schemas' `sn`
-// field is Pro-only (`R621...`), which a plain River 2's serial number would
-// correctly fail; see src/ecoflow/client.js#sendCommand for the full
-// reasoning). That check is deliberate: if a future @ecoflow-api/schemas
-// release changes the required params shape (a field renamed, a new one
-// required), this test fails on the real, current schema rather than on a
-// stale copy of it — exactly the kind of drift a mocked test suite would
-// otherwise miss (see .github/workflows/dependabot-auto-merge.yml's header
-// for why that gap keeps @ecoflow-api/* out of auto-merge).
+// These tests exercise the REAL createPublicTransport() against a fake
+// `fetchImpl` (no network access, no real EcoFlow account) — this is the
+// signing + request-building logic itself, not a mock of it, so a bug in URL
+// construction, query params, or the request body would fail here.
 // -----------------------------------------------------------------------------
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  acOutCfgSchema,
-  mpptCarSchema,
-  chargeLimitSchema,
-  dischargeLimitSchema,
-  watthConfigSchema,
-} from '@ecoflow-api/schemas';
-import { createFakeEcoflowClient } from '../test-fixtures/fakeEcoflowClient.js';
-import {
-  listDevices,
-  getQuota,
-  setAcOutput,
-  setDcOutput,
-  setChargeLimit,
-  setDischargeLimit,
-  setBackupReserve,
-} from '../src/ecoflow/client.js';
+import { createPublicTransport } from '../src/ecoflow/client.js';
 
-test('listDevices maps the raw device list to { sn, name, online }', async () => {
-  const client = createFakeEcoflowClient({
-    devices: [
-      { sn: 'R331ABC', deviceName: 'Garage River 2', online: 1 },
-      { sn: 'R331DEF', online: 0 },
-    ],
-  });
+const config = {
+  access_key: 'myAccessKey',
+  secret_key: 'mySecretKey',
+  api_host: 'https://api-e.ecoflow.com',
+};
 
-  const devices = await listDevices(client);
+function jsonResponse(status, body) {
+  return { status, json: async () => body };
+}
+
+function fakeFetch(handler) {
+  const calls = [];
+  const fn = async (url, init) => {
+    calls.push({ url: url instanceof URL ? url : new URL(url), init });
+    return handler(calls.at(-1));
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+test('listDevices() GETs the device list and maps the response', async () => {
+  const fetchImpl = fakeFetch(() =>
+    jsonResponse(200, {
+      code: '0',
+      message: 'Success',
+      data: [
+        { sn: 'R331ABC', deviceName: 'Garage River 2', online: 1 },
+        { sn: 'R331DEF', online: 0 },
+      ],
+    }),
+  );
+  const transport = createPublicTransport(config, { fetchImpl });
+
+  const devices = await transport.listDevices();
+
   assert.deepEqual(devices, [
     { sn: 'R331ABC', name: 'Garage River 2', online: true },
     { sn: 'R331DEF', name: 'R331DEF', online: false },
   ]);
+  assert.equal(fetchImpl.calls[0].url.pathname, '/iot-open/sign/device/list');
+  assert.equal(fetchImpl.calls[0].init.method, 'GET');
+  assert.equal(fetchImpl.calls[0].init.headers.accessKey, 'myAccessKey');
+  assert.ok(fetchImpl.calls[0].init.headers.sign);
 });
 
-test('getQuota returns the raw flat quota dict for one serial number', async () => {
-  const client = createFakeEcoflowClient({ quotaBySn: { R331ABC: { 'pd.soc': 42 } } });
-  assert.deepEqual(await getQuota(client, 'R331ABC'), { 'pd.soc': 42 });
+test('getQuota() GETs the quota-all endpoint with the sn as a query param', async () => {
+  const fetchImpl = fakeFetch(() =>
+    jsonResponse(200, { code: '0', message: 'Success', data: { 'pd.soc': 77 } }),
+  );
+  const transport = createPublicTransport(config, { fetchImpl });
+
+  const quota = await transport.getQuota('R331ABC');
+
+  assert.deepEqual(quota, { 'pd.soc': 77 });
+  assert.equal(fetchImpl.calls[0].url.pathname, '/iot-open/sign/device/quota/all');
+  assert.equal(fetchImpl.calls[0].url.searchParams.get('sn'), 'R331ABC');
 });
 
-test('getQuota returns {} for a device with no cached quota yet', async () => {
-  const client = createFakeEcoflowClient();
-  assert.deepEqual(await getQuota(client, 'UNKNOWN'), {});
+test('getQuota() returns {} when the response carries no data', async () => {
+  const fetchImpl = fakeFetch(() => jsonResponse(200, { code: '0', message: 'Success' }));
+  const transport = createPublicTransport(config, { fetchImpl });
+
+  assert.deepEqual(await transport.getQuota('R331ABC'), {});
 });
 
-test('setAcOutput sends a valid acOutCfg command (moduleType 5)', async () => {
-  const client = createFakeEcoflowClient();
-  await setAcOutput(client, 'R331ABC', { enabled: 1, xboost: 0, outVoltage: 0, outFreq: 1 });
+test('sendCommand() PUTs the exact {sn, id, version, moduleType, operateType, params} shape', async () => {
+  const fetchImpl = fakeFetch(() =>
+    jsonResponse(200, { code: '0', message: 'Success', eagleEyeTraceId: 't', tid: 't' }),
+  );
+  const transport = createPublicTransport(config, { fetchImpl });
 
-  assert.equal(client.sentCommands.length, 1);
-  const payload = client.sentCommands[0];
-  assert.equal(payload.sn, 'R331ABC');
-  assert.equal(payload.moduleType, 5);
-  assert.equal(payload.operateType, 'acOutCfg');
-  assert.deepEqual(payload.params, { enabled: 1, xboost: 0, out_voltage: 0, out_freq: 1 });
-  assert.doesNotThrow(() => acOutCfgSchema.shape.params.parse(payload.params));
-});
+  await transport.sendCommand('R331ABC', 5, 'mpptCar', { enabled: 1 });
 
-test('setDcOutput sends a valid mpptCar command (moduleType 5)', async () => {
-  const client = createFakeEcoflowClient();
-  await setDcOutput(client, 'R331ABC', 1);
-
-  const payload = client.sentCommands[0];
-  assert.equal(payload.moduleType, 5);
-  assert.equal(payload.operateType, 'mpptCar');
-  assert.deepEqual(payload.params, { enabled: 1 });
-  assert.doesNotThrow(() => mpptCarSchema.shape.params.parse(payload.params));
-});
-
-test('setChargeLimit sends a valid upsConfig command (moduleType 2)', async () => {
-  const client = createFakeEcoflowClient();
-  await setChargeLimit(client, 'R331ABC', 80);
-
-  const payload = client.sentCommands[0];
-  assert.equal(payload.moduleType, 2);
-  assert.equal(payload.operateType, 'upsConfig');
-  assert.deepEqual(payload.params, { maxChgSoc: 80 });
-  assert.doesNotThrow(() => chargeLimitSchema.shape.params.parse(payload.params));
-});
-
-test('setDischargeLimit sends a valid dsgCfg command (moduleType 2)', async () => {
-  const client = createFakeEcoflowClient();
-  await setDischargeLimit(client, 'R331ABC', 10);
-
-  const payload = client.sentCommands[0];
-  assert.equal(payload.moduleType, 2);
-  assert.equal(payload.operateType, 'dsgCfg');
-  assert.deepEqual(payload.params, { minDsgSoc: 10 });
-  assert.doesNotThrow(() => dischargeLimitSchema.shape.params.parse(payload.params));
-});
-
-test('setBackupReserve sends a valid watthConfig command (moduleType 1)', async () => {
-  const client = createFakeEcoflowClient();
-  await setBackupReserve(client, 'R331ABC', { isConfig: 1, bpPowerSoc: 60 });
-
-  const payload = client.sentCommands[0];
-  assert.equal(payload.moduleType, 1);
-  assert.equal(payload.operateType, 'watthConfig');
-  assert.deepEqual(payload.params, { isConfig: 1, bpPowerSoc: 60, minDsgSoc: 0, minChgSoc: 0 });
-  assert.doesNotThrow(() => watthConfigSchema.shape.params.parse(payload.params));
+  const { url, init } = fetchImpl.calls[0];
+  assert.equal(url.pathname, '/iot-open/sign/device/quota');
+  assert.equal(init.method, 'PUT');
+  const body = JSON.parse(init.body);
+  assert.equal(body.sn, 'R331ABC');
+  assert.equal(body.version, '1.0');
+  assert.equal(body.moduleType, 5);
+  assert.equal(body.operateType, 'mpptCar');
+  assert.deepEqual(body.params, { enabled: 1 });
+  assert.equal(typeof body.id, 'number');
 });
 
 test('every sent command gets its own incrementing id', async () => {
-  const client = createFakeEcoflowClient();
-  await setDcOutput(client, 'R331ABC', 1);
-  await setDcOutput(client, 'R331ABC', 0);
-  assert.notEqual(client.sentCommands[0].id, client.sentCommands[1].id);
+  const fetchImpl = fakeFetch(() =>
+    jsonResponse(200, { code: '0', message: 'Success', eagleEyeTraceId: 't', tid: 't' }),
+  );
+  const transport = createPublicTransport(config, { fetchImpl });
+
+  await transport.sendCommand('R331ABC', 5, 'mpptCar', { enabled: 1 });
+  await transport.sendCommand('R331ABC', 5, 'mpptCar', { enabled: 0 });
+
+  const id1 = JSON.parse(fetchImpl.calls[0].init.body).id;
+  const id2 = JSON.parse(fetchImpl.calls[1].init.body).id;
+  assert.notEqual(id1, id2);
+});
+
+test('an EcoFlow error response (HTTP 200, code != "0") throws with the code and message', async () => {
+  const fetchImpl = fakeFetch(() => jsonResponse(200, { code: '8513', message: 'invalid sign' }));
+  const transport = createPublicTransport(config, { fetchImpl });
+
+  await assert.rejects(() => transport.listDevices(), /code: 8513 \| message: invalid sign/);
+});
+
+test('a non-200 HTTP status throws with the status code', async () => {
+  const fetchImpl = fakeFetch(() => jsonResponse(500, { message: 'server error' }));
+  const transport = createPublicTransport(config, { fetchImpl });
+
+  await assert.rejects(() => transport.listDevices(), /HTTP 500/);
 });

@@ -1,9 +1,8 @@
 # EcoFlow
 
 Surveillez et contrôlez votre EcoFlow River 2 (et plus largement la gamme
-River 2 : River 2 Max, River 2 Pro) directement dans Gladys, via l'API
-officielle EcoFlow Open Platform — la même API cloud qu'utilise l'application
-EcoFlow elle-même.
+River 2 : River 2 Max, River 2 Pro) directement dans Gladys, via le cloud
+EcoFlow — le même que celui utilisé par l'application EcoFlow elle-même.
 
 **Important : les appareils EcoFlow n'ont aucun mode de contrôle local/LAN.**
 Même un appareil qui ne quitte jamais votre réseau WiFi est piloté via le
@@ -14,10 +13,29 @@ produits ; la seule exception dans tout le catalogue EcoFlow est l'EZ1, un
 minuteur d'arrosage sans rapport). Votre appareil a besoin d'un accès
 internet sur votre réseau pour que cette intégration fonctionne.
 
+## Deux façons de se connecter
+
+- **Méthode 1 — Open Platform officielle (recommandée)** : un compte
+  développeur gratuit et une paire Access Key/Secret Key. Documentée, et
+  tous les appareils du compte sont découverts automatiquement. Le seul
+  inconvénient est l'approbation EcoFlow, qui peut prendre environ une
+  semaine.
+- **Méthode 2 — Connexion simple (non officielle, optionnelle)** : le même
+  email et mot de passe que pour vous connecter à l'application EcoFlow —
+  aucun compte développeur, aucune attente. Cela utilise les points d'accès
+  internes de l'application EcoFlow plutôt que l'API documentée : cela peut
+  donc changer ou casser sans préavis, et il n'y a pas de découverte
+  automatique des appareils : vous saisissez vous-même le numéro de série de
+  chaque appareil.
+
+Les deux peuvent être configurées en même temps — un appareil est cherché via
+la méthode dont le numéro de série est renseigné (champ de la méthode 2), ou
+via le compte de la méthode 1 sinon.
+
 ## Ce que vous obtenez
 
-Un appareil Gladys est créé par appareil EcoFlow lié à votre compte. Chaque
-appareil expose :
+Un appareil Gladys est créé par appareil EcoFlow, quelle que soit la méthode
+qui l'a trouvé. Chaque appareil expose :
 
 - **Niveau de batterie** (%)
 - **Puissance de charge AC** (W) — puissance entrante par l'entrée secteur
@@ -34,6 +52,8 @@ appareil expose :
 
 ## Configuration
 
+**Méthode 1 (recommandée) :**
+
 1. Créez un compte développeur gratuit et une paire Access Key/Secret Key sur
    [EcoFlow Open Platform](https://developer-eu.ecoflow.com/) (Europe) ou
    [developer.ecoflow.com](https://developer.ecoflow.com/) (international) —
@@ -43,6 +63,15 @@ appareil expose :
 3. Enregistrez : tous les appareils de votre compte EcoFlow apparaissent
    dans l'onglet **Découverte**.
 
+**Méthode 2 (simple, non officielle) :**
+
+1. Ouvrez l'onglet **Configuration** et entrez l'email et le mot de passe de
+   votre compte EcoFlow (les mêmes que pour l'application).
+2. Entrez le numéro de série de chaque appareil (séparés par des virgules si
+   plusieurs) — trouvable dans l'app EcoFlow sous Paramètres > Infos
+   appareil, ou imprimé sur l'appareil.
+3. Enregistrez : le ou les appareils apparaissent dans l'onglet **Découverte**.
+
 ## Actions
 
 - **Tester la connexion** — rafraîchit immédiatement un appareil donné et
@@ -51,14 +80,14 @@ appareil expose :
 
 ## Suites possibles
 
-Volontairement hors du périmètre de cette première version, listées ici
-plutôt que simplement omises :
+Volontairement hors du périmètre actuel, listées ici plutôt que simplement
+omises :
 
-- **Push MQTT en temps réel** à la place du sondage périodique — l'Open
-  Platform EcoFlow propose ce mécanisme (le même point d'accès
-  `/certification` que cette intégration pourrait réutiliser), mais la forme
-  exacte d'un message poussé reste à confirmer sur un compte réel avant de
-  pouvoir remplacer la boucle de sondage actuelle.
+- **Push MQTT en temps réel** à la place du sondage périodique, pour la
+  méthode 1 — la méthode privée (méthode 2) parle déjà MQTT, mais le sujet de
+  push temps réel de la méthode 1 a une forme de message qui reste à
+  confirmer sur un compte réel avant de pouvoir remplacer la boucle de
+  sondage actuelle.
 - **Réglages numériques de limite de charge/décharge et de niveau de réserve
   de secours** (les pourcentages que l'application EcoFlow permet de régler)
   — la catégorie de fonctionnalité `battery-storage` de Gladys n'a pas de
@@ -69,19 +98,24 @@ plutôt que simplement omises :
 ## Testé et confirmé
 
 État honnête, pour que ce que « ça fonctionne » recouvre réellement soit
-clair — **aucun compte développeur EcoFlow ni appareil River 2 physique
-n'étaient disponibles lors de l'écriture de cette intégration.**
+clair — **aucun compte EcoFlow (développeur ou app) ni appareil River 2
+physique n'étaient disponibles lors de l'écriture de cette intégration.**
 
 - L'API REST (liste des appareils, instantané de quota, envoi de commande)
-  et sa signature de requête HMAC-SHA256 sont écrites à la main et
-  recoupées avec deux implémentations indépendantes et réellement utilisées,
-  lues directement : le code `api/public_api.py` de l'intégration
+  et sa signature de requête HMAC-SHA256 (méthode 1) sont écrites à la main
+  et recoupées avec deux implémentations indépendantes et réellement
+  utilisées, lues directement : le code `api/public_api.py` de l'intégration
   communautaire Home Assistant
   [`tolwi/hassio-ecoflow-cloud`](https://github.com/tolwi/hassio-ecoflow-cloud),
   et le code source `SignatureBuilder`/`RestClient` de
   [`rustyy/ecoflow-api`](https://github.com/rustyy/ecoflow-api) — non
-  exécutées comme dépendance (voir plus bas), mais lues pour confirmer
+  exécutées comme dépendance (voir le README), mais lues pour confirmer
   l'algorithme et les points d'accès.
+- Le chemin connexion simple + MQTT (méthode 2) est de même recoupé avec
+  `api/private_api.py` et `devices/__init__.py` de
+  `tolwi/hassio-ecoflow-cloud` (la requête/réponse `latestQuotas` et la forme
+  de commande `{moduleType, operateType, params}` sont IDENTIQUES à la
+  méthode 1 — seule l'enveloppe de transport diffère).
 - Les noms des champs de quota de la gamme River 2 (`pd.soc`,
   `inv.outputWatts`, `mppt.inWatts`...) et la forme des commandes
   (`acOutCfg`, `mpptCar`, `upsConfig`, `dsgCfg`, `watthConfig`) sont validés
@@ -93,17 +127,18 @@ n'étaient disponibles lors de l'écriture de cette intégration.**
   (un chemin interne cassé qui ne peut jamais se résoudre). Cette intégration
   n'en dépend pas — la couche REST/signature est écrite à la main, et
   confirmée fonctionnelle par la suite de tests de ce dépôt.
-- Ce qui n'est **pas** confirmé indépendamment : les valeurs exactes de
+- Ce qui n'est **pas** confirmé indépendamment : une vraie connexion à un
+  compte EcoFlow réel (les deux méthodes), les valeurs exactes de
   `out_voltage`/`out_freq` qu'un vrai River 2 rapporte pour
   `mppt.cfgAcOutVol`/`mppt.cfgAcOutFreq` (utilisées pour compléter la
   commande de sortie AC en plus du champ que vous modifiez réellement), et
   le préfixe réel du numéro de série rapporté par l'appareil (un
   espace réservé a été utilisé dans les tests). Faites tourner cette
   intégration avec `LOG_LEVEL=debug` sur votre propre River 2 et ouvrez un
-  ticket si une commande se comporte de façon inattendue.
+  ticket si quelque chose se comporte de façon inattendue.
 
 ## Dépannage
 
 Consultez les logs de l'intégration depuis l'interface Gladys (ou
 `docker logs` sur l'hôte) avec `LOG_LEVEL=debug` pour le détail complet de
-chaque requête envoyée à l'API Cloud EcoFlow.
+chaque requête envoyée à EcoFlow, quelle que soit la méthode.

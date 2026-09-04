@@ -1,19 +1,36 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_CONFIG, VALID_API_HOSTS, normalizeConfig, isConfigured } from '../src/config.js';
+import {
+  DEFAULT_CONFIG,
+  VALID_API_HOSTS,
+  normalizeConfig,
+  isConfigured,
+  isPublicConfigured,
+  isPrivateConfigured,
+} from '../src/config.js';
 
 test('normalizeConfig fills in defaults for an empty config', () => {
   const config = normalizeConfig();
   assert.equal(config.access_key, '');
   assert.equal(config.secret_key, '');
   assert.equal(config.api_host, DEFAULT_CONFIG.api_host);
+  assert.equal(config.private_username, '');
+  assert.equal(config.private_password, '');
+  assert.deepEqual(config.privateDeviceSns, []);
   assert.equal(config.poll_interval_seconds, DEFAULT_CONFIG.poll_interval_seconds);
 });
 
-test('normalizeConfig trims access_key/secret_key', () => {
-  const config = normalizeConfig({ access_key: '  abc  ', secret_key: ' def ' });
+test('normalizeConfig trims access_key/secret_key/private_username, not private_password', () => {
+  const config = normalizeConfig({
+    access_key: '  abc  ',
+    secret_key: ' def ',
+    private_username: ' alice@example.com ',
+    private_password: ' hunter2 ',
+  });
   assert.equal(config.access_key, 'abc');
   assert.equal(config.secret_key, 'def');
+  assert.equal(config.private_username, 'alice@example.com');
+  assert.equal(config.private_password, ' hunter2 ');
 });
 
 test('normalizeConfig rejects an unknown api_host', () => {
@@ -33,8 +50,46 @@ test('normalizeConfig clamps poll_interval_seconds to [10, 3600]', () => {
   assert.equal(normalizeConfig({ poll_interval_seconds: 60 }).poll_interval_seconds, 60);
 });
 
-test('isConfigured requires both access_key and secret_key', () => {
+test('normalizeConfig parses private_device_sns into a deduplicated, trimmed list', () => {
+  const config = normalizeConfig({ private_device_sns: ' R331ABC, R331DEF ,R331ABC,' });
+  assert.deepEqual(config.privateDeviceSns, ['R331ABC', 'R331DEF']);
+});
+
+test('isPublicConfigured requires both access_key and secret_key', () => {
+  assert.equal(isPublicConfigured(normalizeConfig()), false);
+  assert.equal(isPublicConfigured(normalizeConfig({ access_key: 'a' })), false);
+  assert.equal(isPublicConfigured(normalizeConfig({ access_key: 'a', secret_key: 'b' })), true);
+});
+
+test('isPrivateConfigured requires username, password, and at least one device sn', () => {
+  assert.equal(isPrivateConfigured(normalizeConfig()), false);
+  assert.equal(
+    isPrivateConfigured(normalizeConfig({ private_username: 'a@b.com', private_password: 'p' })),
+    false,
+  );
+  assert.equal(
+    isPrivateConfigured(
+      normalizeConfig({
+        private_username: 'a@b.com',
+        private_password: 'p',
+        private_device_sns: 'R331ABC',
+      }),
+    ),
+    true,
+  );
+});
+
+test('isConfigured is true when either method alone is configured', () => {
   assert.equal(isConfigured(normalizeConfig()), false);
-  assert.equal(isConfigured(normalizeConfig({ access_key: 'a' })), false);
   assert.equal(isConfigured(normalizeConfig({ access_key: 'a', secret_key: 'b' })), true);
+  assert.equal(
+    isConfigured(
+      normalizeConfig({
+        private_username: 'a@b.com',
+        private_password: 'p',
+        private_device_sns: 'R331ABC',
+      }),
+    ),
+    true,
+  );
 });
