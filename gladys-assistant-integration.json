@@ -6,8 +6,8 @@
     "en": "Monitor and control EcoFlow River 2 power stations via the official API or a simple login.",
     "fr": "Surveillez et contrôlez vos stations EcoFlow River 2 via l'API officielle ou une connexion simple."
   },
-  "version": "0.2.1",
-  "docker_image": "ghcr.io/lm1lc3n7/gladys-ecoflow:0.2.1",
+  "version": "0.2.2",
+  "docker_image": "ghcr.io/lm1lc3n7/gladys-ecoflow:0.2.2",
   "gladys_version": ">=4.86.1",
   "cover_image": "https://raw.githubusercontent.com/LM1LC3N7/gladys-ecoflow/main/cover.png",
   "categories": ["energy"],
