@@ -2,14 +2,20 @@
 // Device type: EcoFlow River 2 (family) portable power station.
 //
 // Unlike a local-network device, there is no persistent session to hold open
-// here — every read is a REST poll and every write is a REST PUT (see
-// src/ecoflow/client.js). This module owns:
-//   - buildDiscoveredDevice() — the discovery payload for one EcoFlow-account
-//     device;
-//   - a small registry of `external_id -> { sn, lastQuota }`, kept current by
-//     src/devices/index.js's poll loop (applyQuota()) and used here to fill
-//     in the fields EcoFlow's `acOutCfg` command requires alongside whichever
-//     one the user actually toggled (see onSetValue());
+// here — every read/write goes through whichever transport backs this
+// device: the official REST API (src/ecoflow/client.js) or the simple
+// email/password + MQTT path (src/ecoflow/privateClient.js). Both expose the
+// same `{ getQuota(sn), sendCommand(sn, moduleType, operateType, params) }`
+// shape, so this module never branches on which one it's talking to — the
+// registry just carries the right transport alongside each device's `sn`.
+//
+// This module owns:
+//   - buildDiscoveredDevice() — the discovery payload for one device;
+//   - a small registry of `external_id -> { sn, transport, lastQuota }`,
+//     kept current by src/devices/index.js (registerDevice()/applyQuota())
+//     and used here to fill in the fields EcoFlow's `acOutCfg` command
+//     requires alongside whichever one the user actually toggled (see
+//     onSetValue());
 //   - onSetValue() / runTestConnectionAction().
 // -----------------------------------------------------------------------------
 
@@ -20,20 +26,20 @@ import {
   buildFeatures,
   extractFeatureValues,
 } from '../ecoflow/quota.js';
-import { getQuota, setAcOutput, setDcOutput, setBackupReserve } from '../ecoflow/client.js';
+import { setAcOutput, setDcOutput, setBackupReserve } from '../ecoflow/commands.js';
 
 export const DEVICE_TYPE = 'ecoflow_power_station';
 
 const logger = createLogger({ name: DEVICE_TYPE });
 
-// external_id -> { sn, lastQuota: object }
+// external_id -> { sn, transport, lastQuota: object }
 const connections = new Map();
 
 export function deviceSnOf(device) {
   return (device.params ?? []).find((p) => p.name === 'ECOFLOW_SN')?.value;
 }
 
-/** Build the discovery payload for one device known through the EcoFlow account. */
+/** Build the discovery payload for one device known through either onboarding method. */
 export function buildDiscoveredDevice(gladys, { sn, name }) {
   const ids = gladys.externalIds(DEVICE_TYPE, sn);
   return {
@@ -45,9 +51,9 @@ export function buildDiscoveredDevice(gladys, { sn, name }) {
 }
 
 /** Register (or reuse) the registry entry for one Gladys-created device. */
-export function registerDevice(externalId, sn) {
+export function registerDevice(externalId, sn, transport) {
   if (!connections.has(externalId)) {
-    connections.set(externalId, { sn, lastQuota: {} });
+    connections.set(externalId, { sn, transport, lastQuota: {} });
   }
   return connections.get(externalId);
 }
@@ -77,10 +83,11 @@ export function applyQuota(gladys, device, quota) {
 
 /**
  * AC output enable/X-Boost travel together in EcoFlow's `acOutCfg` command
- * (see src/ecoflow/client.js#setAcOutput) — this fills in the two fields the
- * caller isn't setting from the device's last-known quota, falling back to a
- * safe default (AC off, 50Hz — EcoFlow's `out_freq` is a region code, 1=50Hz
- * 2=60Hz, not a literal frequency) before the first quota poll has completed.
+ * (see src/ecoflow/commands.js#setAcOutput) — this fills in the two fields
+ * the caller isn't setting from the device's last-known quota, falling back
+ * to a safe default (AC off, 50Hz — EcoFlow's `out_freq` is a region code,
+ * 1=50Hz 2=60Hz, not a literal frequency) before the first quota poll has
+ * completed.
  */
 function acOutCfgParams(quota, overrides) {
   return {
@@ -92,8 +99,8 @@ function acOutCfgParams(quota, overrides) {
   };
 }
 
-/** Dispatch a user command (`onSetValue`) to the right EcoFlow API call. */
-export async function onSetValue(gladys, client, { device, feature, value }) {
+/** Dispatch a user command (`onSetValue`) to the device's own transport. */
+export async function onSetValue(gladys, { device, feature, value }) {
   const entry = connections.get(device.external_id);
   if (!entry) {
     throw new Error(`${device.external_id} is not known`);
@@ -104,13 +111,13 @@ export async function onSetValue(gladys, client, { device, feature, value }) {
   const enabled = value ? 1 : 0;
 
   if (key === FEATURE.AC_OUTPUT_ENABLED) {
-    await setAcOutput(client, entry.sn, acOutCfgParams(quota, { enabled }));
+    await setAcOutput(entry.transport, entry.sn, acOutCfgParams(quota, { enabled }));
   } else if (key === FEATURE.XBOOST_ENABLED) {
-    await setAcOutput(client, entry.sn, acOutCfgParams(quota, { xboost: enabled }));
+    await setAcOutput(entry.transport, entry.sn, acOutCfgParams(quota, { xboost: enabled }));
   } else if (key === FEATURE.DC_OUTPUT_ENABLED) {
-    await setDcOutput(client, entry.sn, enabled);
+    await setDcOutput(entry.transport, entry.sn, enabled);
   } else if (key === FEATURE.BACKUP_RESERVE_ENABLED) {
-    await setBackupReserve(client, entry.sn, {
+    await setBackupReserve(entry.transport, entry.sn, {
       isConfig: enabled,
       bpPowerSoc: quota['pd.bpPowerSoc'] ?? 50,
     });
@@ -120,7 +127,7 @@ export async function onSetValue(gladys, client, { device, feature, value }) {
 }
 
 /** `test_connection` manifest action: re-poll this device's quota right now. */
-export async function runTestConnectionAction(gladys, client, { fields }) {
+export async function runTestConnectionAction(gladys, { fields }) {
   const entry = connections.get(fields.device);
   if (!entry) {
     return {
@@ -130,18 +137,18 @@ export async function runTestConnectionAction(gladys, client, { fields }) {
   }
 
   try {
-    const quota = await getQuota(client, entry.sn);
+    const quota = await entry.transport.getQuota(entry.sn);
     entry.lastQuota = quota;
     const soc = quota['pd.soc'];
     const acOut = quota['inv.outputWatts'];
     return {
-      en: `Reached the EcoFlow Cloud API for ${entry.sn}. Battery: ${soc ?? '?'}%, AC output: ${acOut ?? '?'}W.`,
-      fr: `API Cloud EcoFlow jointe pour ${entry.sn}. Batterie : ${soc ?? '?'}%, sortie AC : ${acOut ?? '?'}W.`,
+      en: `Reached ${entry.sn}. Battery: ${soc ?? '?'}%, AC output: ${acOut ?? '?'}W.`,
+      fr: `${entry.sn} joint. Batterie : ${soc ?? '?'}%, sortie AC : ${acOut ?? '?'}W.`,
     };
   } catch (err) {
     return {
-      en: `Could not reach the EcoFlow Cloud API for ${entry.sn}: ${err.message}`,
-      fr: `Impossible de joindre l'API Cloud EcoFlow pour ${entry.sn} : ${err.message}`,
+      en: `Could not reach ${entry.sn}: ${err.message}`,
+      fr: `Impossible de joindre ${entry.sn} : ${err.message}`,
     };
   }
 }
