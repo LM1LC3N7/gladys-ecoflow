@@ -1,6 +1,6 @@
 {
   "name": "gladys-ecoflow",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Gladys Assistant external integration to monitor and control EcoFlow power stations (River 2 family), via the official Open Platform API or a simple email/password login.",
   "type": "module",
