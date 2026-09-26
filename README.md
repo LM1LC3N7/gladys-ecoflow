@@ -1,5 +1,7 @@
 # gladys-ecoflow
 
+![EcoFlow integration for Gladys Assistant](./cover.png)
+
 External integration for [Gladys Assistant](https://gladysassistant.com) to monitor and control
 EcoFlow portable power stations (River 2 family: River 2, River 2 Max, River 2 Pro), via two
 independent onboarding methods (either one alone is enough — see `src/config.js`'s header):
