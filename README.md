@@ -1,6 +1,6 @@
 # gladys-ecoflow
 
-![EcoFlow integration for Gladys Assistant](./cover.png)
+![EcoFlow integration for Gladys Assistant](./cover.jpg)
 
 External integration for [Gladys Assistant](https://gladysassistant.com) to monitor and control
 EcoFlow portable power stations (River 2 family: River 2, River 2 Max, River 2 Pro), via two
@@ -160,7 +160,7 @@ is still there for a deliberate minor/major release, run by hand from the Action
 │  └─ en.md / fr.md            # END-USER documentation, re-hosted by Gladys itself in its UI
 ├─ gladys-assistant-integration.json  # the manifest: name, version, Docker image, config form, actions
 ├─ Dockerfile                  # single-stage: no local device protocol, no Python bridge needed
-└─ cover.png                   # catalog cover
+└─ cover.jpg                   # catalog cover (JPEG: Gladys caps this at 150 KB)
 ```
 
 ## Run it locally
