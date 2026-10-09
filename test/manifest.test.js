@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { DEFAULT_CONFIG, VALID_API_HOSTS } from '../src/config.js';
 import { SCENE_ACTION, BOUNDS } from '../src/sceneActions.js';
-import { SCENE_TRIGGER } from '../src/devices/events.js';
+import { SCENE_TRIGGER, BATTERY_LOW_THRESHOLDS } from '../src/devices/events.js';
 import { WIDGET_KEY } from '../src/widget.js';
 
 const manifest = JSON.parse(
@@ -46,14 +46,31 @@ test('scene trigger keys match exactly the events src/devices/events.js fires', 
 
 test('every scene trigger declares the variables carried by its event data', () => {
   for (const trigger of manifest.scene_triggers) {
+    const expected = ['battery_level', 'output_watts'];
+    if (trigger.key === SCENE_TRIGGER.BATTERY_LOW) {
+      expected.push('threshold', 'remaining_minutes');
+    }
     assert.deepEqual(
       trigger.variables.map((v) => v.key),
-      ['battery_level', 'output_watts'],
+      expected,
+      trigger.key,
     );
     const device = trigger.fields.find((f) => f.key === 'device');
     assert.equal(device.source, 'devices');
     assert.equal(device.required, false, 'an empty device filter means "any station"');
   }
+});
+
+test('the battery_low threshold filter offers exactly the thresholds the code fires', () => {
+  const trigger = manifest.scene_triggers.find((t) => t.key === SCENE_TRIGGER.BATTERY_LOW);
+  const field = trigger.fields.find((f) => f.key === 'threshold');
+  assert.equal(field.type, 'select');
+  assert.equal(field.required, false, 'empty = any threshold');
+  // select filters are compared as strings by the core: "20" matches the number 20
+  assert.deepEqual(
+    field.options.map((o) => o.value),
+    BATTERY_LOW_THRESHOLDS.map(String),
+  );
 });
 
 test('scene action keys match the handlers of src/sceneActions.js', () => {

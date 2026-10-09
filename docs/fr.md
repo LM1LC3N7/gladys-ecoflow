@@ -87,18 +87,22 @@ affiche :
 station optionnel (vide = n'importe quelle station) et les variables _niveau de
 batterie_ et _puissance de sortie totale_ :
 
-| Déclencheur                 | Quand il se déclenche                                                                                         |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Coupure de l'entrée secteur | l'entrée AC n'est plus alimentée — par exemple une coupure de courant sur une station utilisée comme onduleur |
-| Retour de l'entrée secteur  | l'entrée AC est de nouveau alimentée                                                                          |
-| La station ne répond plus   | hors ligne dans le cloud EcoFlow, ou 3 rafraîchissements en échec d'affilée                                   |
-| La station répond à nouveau | sortie de l'état précédent                                                                                    |
-| Limite de charge atteinte   | la batterie atteint sa limite de charge (100 % par défaut)                                                    |
+| Déclencheur                 | Quand il se déclenche                                                                                                                                                                     |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Coupure de l'entrée secteur | l'entrée AC n'est plus alimentée — par exemple une coupure de courant sur une station utilisée comme onduleur                                                                             |
+| Retour de l'entrée secteur  | l'entrée AC est de nouveau alimentée                                                                                                                                                      |
+| La station ne répond plus   | hors ligne dans le cloud EcoFlow, ou 3 rafraîchissements en échec d'affilée                                                                                                               |
+| La station répond à nouveau | sortie de l'état précédent                                                                                                                                                                |
+| Limite de charge atteinte   | la batterie atteint sa limite de charge (100 % par défaut)                                                                                                                                |
+| Batterie faible             | la batterie descend à 50, 30, 20, 10 ou 5 % — choisissez le niveau dans le filtre _Niveau atteint_ (vide = n'importe lequel) ; variables en plus _niveau atteint_ et _autonomie restante_ |
 
 Chacun se déclenche une seule fois par changement, jamais à chaque
-rafraîchissement. Les seuils comme « batterie sous 20 % » ou « autonomie sous
-30 min » n'ont pas besoin de déclencheur dédié : utilisez le déclencheur
-standard de Gladys sur l'état de la fonctionnalité correspondante.
+rafraîchissement. « Batterie faible » ne se redéclenche qu'une fois la batterie
+remontée de 5 points au-dessus du niveau. Pour tout autre seuil (« batterie
+sous 25 % », « autonomie sous 30 min »), utilisez le déclencheur standard de
+Gladys : _Changement d'état d'un appareil_ → la fonctionnalité _Niveau de
+batterie_ (ou _Autonomie restante_) de la station → `<` et votre valeur, avec
+l'option pour ne déclencher qu'au franchissement du seuil.
 
 **Actions** (éditeur de scènes → « Alors… ») :
 

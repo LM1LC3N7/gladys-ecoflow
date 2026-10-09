@@ -88,3 +88,68 @@ test('event data is flat and carries the declared variables', () => {
   });
   assert.deepEqual(event.data, { device: DEVICE, battery_level: 64, output_watts: 120 });
 });
+
+function batteryLow(state, level, extra = {}) {
+  return detectEvents(state, {
+    externalId: DEVICE,
+    reachable: true,
+    summary: summarizeQuota({ 'pd.soc': level, ...extra }),
+  })
+    .filter((event) => event.key === SCENE_TRIGGER.BATTERY_LOW)
+    .map((event) => event.data.threshold);
+}
+
+test('battery_low fires once when the level falls to a threshold', () => {
+  const state = createEventState();
+  assert.deepEqual(batteryLow(state, 25), [], 'first observation only seeds');
+  assert.deepEqual(batteryLow(state, 21), []);
+  assert.deepEqual(batteryLow(state, 20), [20]);
+  assert.deepEqual(batteryLow(state, 19), []);
+});
+
+test('battery_low reports every threshold crossed between two polls', () => {
+  const state = createEventState();
+  batteryLow(state, 35);
+  assert.deepEqual(batteryLow(state, 9), [30, 20, 10]);
+});
+
+test('battery_low re-arms only 5 points above the threshold', () => {
+  const state = createEventState();
+  batteryLow(state, 22);
+  assert.deepEqual(batteryLow(state, 20), [20]);
+  assert.deepEqual(batteryLow(state, 23), []);
+  assert.deepEqual(batteryLow(state, 20), [], 'wavering around 20 % does not fire again');
+  assert.deepEqual(batteryLow(state, 25), []);
+  assert.deepEqual(batteryLow(state, 20), [20]);
+});
+
+test('battery_low does not fire at startup for a battery already below a threshold', () => {
+  const state = createEventState();
+  assert.deepEqual(batteryLow(state, 8), []);
+  assert.deepEqual(batteryLow(state, 7), []);
+  assert.deepEqual(batteryLow(state, 5), [5]);
+});
+
+test('battery_low data carries the threshold and the remaining time', () => {
+  const state = createEventState();
+  batteryLow(state, 12);
+  const [event] = detectEvents(state, {
+    externalId: DEVICE,
+    reachable: true,
+    summary: summarizeQuota({
+      'pd.soc': 10,
+      'pd.wattsOutSum': 60,
+      'bms_emsStatus.dsgRemainTime': 42,
+    }),
+  });
+  assert.deepEqual(event, {
+    key: SCENE_TRIGGER.BATTERY_LOW,
+    data: {
+      device: DEVICE,
+      battery_level: 10,
+      output_watts: 60,
+      threshold: 10,
+      remaining_minutes: 42,
+    },
+  });
+});
