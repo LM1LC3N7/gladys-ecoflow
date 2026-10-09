@@ -2,23 +2,15 @@
 # Dependabot version updates.
 #
 # Opens a PR by itself when a newer version is available, for the three
-# places this repo pins a version: npm packages, the Dockerfile base image,
-# and the GitHub Actions the workflows use. Every PR runs the full ci.yml
-# suite (lint, `node --test`, a real `docker build`) — see
-# .github/workflows/dependabot-auto-merge.yml for which of these Dependabot
-# then merges on its own once that run is green, and
-# .github/workflows/auto-release.yml for what happens right after (a patch
-# release is cut and its image published automatically).
+# places this repo pins a version: npm packages, the Dockerfile base image
+# (tag + digest: a rebuilt `node:24-alpine` with security fixes arrives as a
+# digest bump), and the GitHub Actions the workflows use. Every PR runs the
+# full ci.yml suite — see .github/workflows/dependabot-auto-merge.yml for
+# which of these Dependabot then merges on its own once that run is green,
+# and .github/workflows/auto-release.yml for which merges cut a release.
 #
-# `target-branch: main` is set explicitly on every entry below: this repo's
-# GitHub "default branch" setting is (still, as of this writing) pointed at
-# the initial bootstrap branch rather than `main` (Settings -> General ->
-# Default branch fixes that, but no API available here can do it — same
-# situation, and same fix, as gladys-hydro-quebec's own dependabot.yml), and
-# Dependabot targets the repository's default branch when this key is
-# absent — confirmed by the first two Dependabot PRs this repo ever opened
-# (#1, #2) landing against that branch instead of `main`. Pinning `main`
-# here keeps every future PR correctly aimed regardless of that setting.
+# `target-branch: main` keeps every PR aimed at main whatever the repository
+# default branch setting says (it pointed elsewhere when this repo started).
 # -----------------------------------------------------------------------------
 version: 2
 updates:
@@ -42,6 +34,12 @@ updates:
     target-branch: 'main'
     schedule:
       interval: 'weekly'
+    # A new Node major is a deliberate change (odd majors are never LTS, and
+    # the image should follow the LTS line the Gladys core runs on): only
+    # minor/patch tags and digest updates are proposed automatically.
+    ignore:
+      - dependency-name: 'node'
+        update-types: ['version-update:semver-major']
     labels:
       - 'dependencies'
     commit-message:
