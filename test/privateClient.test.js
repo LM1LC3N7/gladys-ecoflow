@@ -138,9 +138,12 @@ function createFakeMqttClient() {
   let messageHandler = null;
   return {
     connected: true,
+    ended: false,
     published: [],
     subscribed: [],
+    listeners: {},
     on(event, handler) {
+      this.listeners[event] = handler;
       if (event === 'message') {
         messageHandler = handler;
       }
@@ -153,6 +156,7 @@ function createFakeMqttClient() {
     },
     async endAsync() {
       this.connected = false;
+      this.ended = true;
     },
     emitMessage(topic, payloadObject) {
       messageHandler(topic, Buffer.from(JSON.stringify(payloadObject)));
@@ -267,4 +271,92 @@ test('createPrivateTransport().disconnect() ends the MQTT session', async () => 
   await transport.disconnect();
 
   assert.equal(fakeClient.connected, false);
+});
+
+test('createPrivateTransport() opens ONE session for concurrent first calls', async () => {
+  const fakeClient = createFakeMqttClient();
+  let connectCount = 0;
+  const mqttConnect = async () => {
+    connectCount += 1;
+    await new Promise((resolve) => setImmediate(resolve));
+    return fakeClient;
+  };
+  const transport = createPrivateTransport(testConfig(), { fetchImpl: testFetch(), mqttConnect });
+
+  await Promise.all([
+    transport.sendCommand('R331ABC', 5, 'mpptCar', { enabled: 1 }),
+    transport.sendCommand('R331ABC', 5, 'mpptCar', { enabled: 0 }),
+    transport.connect(),
+  ]);
+
+  assert.equal(connectCount, 1);
+});
+
+test('createPrivateTransport() ends a disconnected client before opening a new session', async () => {
+  const first = createFakeMqttClient();
+  const second = createFakeMqttClient();
+  const clients = [first, second];
+  const mqttConnect = async () => clients.shift();
+  const transport = createPrivateTransport(testConfig(), { fetchImpl: testFetch(), mqttConnect });
+
+  await transport.connect();
+  first.connected = false; // network blip: mqtt.js is reconnecting in the background
+  await transport.sendCommand('R331ABC', 5, 'mpptCar', { enabled: 1 });
+
+  assert.equal(first.ended, true, 'the stale client must not keep reconnecting');
+  assert.equal(second.published.length, 1);
+});
+
+test('createPrivateTransport().getQuota() shares one reply between concurrent requests for a device', async () => {
+  const fakeClient = createFakeMqttClient();
+  const transport = createPrivateTransport(testConfig(), {
+    fetchImpl: testFetch(),
+    mqttConnect: async () => fakeClient,
+  });
+
+  const a = transport.getQuota('R331ABC');
+  const b = transport.getQuota('R331ABC');
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(fakeClient.published.length, 1, 'one latestQuotas request on the wire');
+  fakeClient.emitMessage('/app/user-1/R331ABC/thing/property/get_reply', {
+    operateType: 'latestQuotas',
+    data: { quotaMap: { 'pd.soc': 42 } },
+  });
+
+  assert.deepEqual(await Promise.all([a, b]), [{ 'pd.soc': 42 }, { 'pd.soc': 42 }]);
+});
+
+test('createPrivateTransport() never logs back in once disconnected (replaced transport)', async () => {
+  const fetchImpl = testFetch();
+  const transport = createPrivateTransport(testConfig(), {
+    fetchImpl,
+    mqttConnect: async () => createFakeMqttClient(),
+  });
+
+  await transport.connect();
+  await transport.disconnect();
+  const loginsBefore = fetchImpl.calls.length;
+
+  await assert.rejects(() => transport.getQuota('R331ABC'), /closed/);
+  assert.equal(fetchImpl.calls.length, loginsBefore);
+});
+
+test('createPrivateTransport().connect() surfaces a refused login', async () => {
+  const fetchImpl = fakeFetch(() => jsonResponse({ code: '1', message: 'incorrect password' }));
+  const transport = createPrivateTransport(testConfig(), {
+    fetchImpl,
+    mqttConnect: async () => createFakeMqttClient(),
+  });
+  await assert.rejects(() => transport.connect(), /incorrect password/);
+});
+
+test('createPrivateTransport() logs MQTT errors instead of leaving them unhandled', async () => {
+  const fakeClient = createFakeMqttClient();
+  const transport = createPrivateTransport(testConfig(), {
+    fetchImpl: testFetch(),
+    mqttConnect: async () => fakeClient,
+  });
+  await transport.connect();
+  assert.ok(fakeClient.listeners.error, 'an error listener is registered');
 });

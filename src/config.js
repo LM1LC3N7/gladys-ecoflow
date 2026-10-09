@@ -34,6 +34,11 @@ const POLL_MIN = 10;
 const POLL_MAX = 3600;
 export const VALID_API_HOSTS = ['https://api-e.ecoflow.com', 'https://api-a.ecoflow.com'];
 
+// EcoFlow serial numbers are 16 upper-case alphanumeric characters (e.g.
+// R331ZEB4HFJC1234); the bounds are kept loose so a model with another
+// length is still accepted, this only catches a pasted label or a typo.
+const SERIAL_NUMBER_PATTERN = /^[A-Z0-9]{8,32}$/;
+
 function toBoundedNumber(value, fallback, min, max) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : fallback;
@@ -62,7 +67,7 @@ export function normalizeConfig(raw = {}) {
     secret_key: String(raw.secret_key ?? '').trim(),
     private_username: String(raw.private_username ?? '').trim(),
     private_password: String(raw.private_password ?? ''),
-    privateDeviceSns: parseList(raw.private_device_sns),
+    privateDeviceSns: [...new Set(parseList(raw.private_device_sns).map((sn) => sn.toUpperCase()))],
     poll_interval_seconds: toBoundedNumber(
       raw.poll_interval_seconds,
       DEFAULT_CONFIG.poll_interval_seconds,
@@ -87,4 +92,9 @@ export function isPrivateConfigured(config) {
 /** Whether enough is configured to reach the EcoFlow API at all, through either method. */
 export function isConfigured(config) {
   return isPublicConfigured(config) || isPrivateConfigured(config);
+}
+
+/** Manually-entered serial numbers that do not look like an EcoFlow serial number. */
+export function invalidDeviceSns(config) {
+  return config.privateDeviceSns.filter((sn) => !SERIAL_NUMBER_PATTERN.test(sn));
 }

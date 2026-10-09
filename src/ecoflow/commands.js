@@ -14,6 +14,7 @@
 // -----------------------------------------------------------------------------
 
 import {
+  acChargingSettingsSchema,
   acOutCfgSchema,
   mpptCarSchema,
   chargeLimitSchema,
@@ -88,5 +89,21 @@ export function setBackupReserve(transport, sn, { isConfig, bpPowerSoc }) {
     'watthConfig',
     { isConfig, bpPowerSoc, minDsgSoc: 0, minChgSoc: 0 },
     watthConfigSchema,
+  );
+}
+
+/**
+ * AC charging: power drawn from the wall (W) and pause/resume, which travel
+ * together in one `acChgCfg` command (acChargingSettingsSchema requires both
+ * fields, `chgPauseFlag` being 0 or 1 — there is no "leave as-is" value).
+ */
+export function setAcCharging(transport, sn, { chgWatts, paused }) {
+  return sendCommand(
+    transport,
+    sn,
+    5,
+    'acChgCfg',
+    { chgWatts, chgPauseFlag: paused ? 1 : 0 },
+    acChargingSettingsSchema,
   );
 }

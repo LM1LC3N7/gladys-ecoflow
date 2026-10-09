@@ -12,7 +12,8 @@ independent onboarding methods (either one alone is enough — see `src/config.j
    MQTT-based, no developer account or approval wait, but no device auto-discovery (the serial
    number is typed in by hand).
 
-Built on the JavaScript SDK
+Requires **Gladys Assistant 5.1+** (the integration declares a dashboard widget and scene
+triggers/actions, which older cores reject). Built on the JavaScript SDK
 [`@gladysassistant/integration-sdk`](https://github.com/GladysAssistant/integration-sdk-js), from
 the official [`integration-template-js`](https://github.com/GladysAssistant/integration-template-js).
 
@@ -28,28 +29,26 @@ the full reasoning and `gladys-assistant-integration.json`'s `transports: ["clou
 - **Two transports behind one shared interface**: `{ getQuota(sn), sendCommand(sn, moduleType,
 operateType, params) }`, implemented by `createPublicTransport()` (`src/ecoflow/client.js`, a
   signed REST request) and `createPrivateTransport()` (`src/ecoflow/privateClient.js`, an MQTT
-  publish/subscribe round-trip). `src/devices/device.js` never branches on which one backs a given
-  device — the registry just carries the right transport alongside each device's `sn`.
-- **Polling, not push, for both**: a background timer (`poll_interval_seconds`, default 30s)
-  re-fetches each device's full quota snapshot (a REST `GET` for Method 1, an MQTT
-  `latestQuotas` request/reply round-trip for Method 2); a command's effect is reflected on the
-  next poll tick, not instantly pushed back.
-- **One Gladys device per EcoFlow device**, however it was found — auto-discovered via
-  `GET /iot-open/sign/device/list` for Method 1, or from the manually-entered serial number list
-  for Method 2.
-- **A fixed feature set** (`src/ecoflow/quota.js`) for the whole River 2 family, reused unchanged
-  by both transports (their quota reply shape is identical): battery level, AC charging power,
-  total output power, AC output power, solar input power (read-only sensors), and AC output /
-  X-Boost / DC output / backup reserve (binary switches). See that file's header for why this list
-  is deliberately conservative for now.
-- **Command shapes shared across both transports** (`src/ecoflow/commands.js`): EcoFlow's
-  `{moduleType, operateType, params}` triple is transport-independent (confirmed by reading
-  EcoFlow's private and public wire formats side by side) — each command validates `params`
-  against `@ecoflow-api/schemas`' real, current zod schemas before handing it to whichever
-  transport a device uses.
-- **Hand-written REST client + signing** (`src/ecoflow/client.js`, `src/ecoflow/signing.js`): NOT
-  built on `@ecoflow-api/rest-client` — that package's published `0.6.0` build crashes on import
-  for every consumer (see "Dependencies" below).
+  publish/subscribe round-trip with a single shared session). `src/devices/device.js` never
+  branches on which one backs a given device — the registry carries the right transport alongside
+  each device's `sn`, and is rebuilt on every configuration change.
+- **Polling, deduplicated**: a background timer (`poll_interval_seconds`, default 30s) re-fetches
+  each device's quota snapshot; polls never overlap, and only the values that changed are sent to
+  Gladys, in batches (`publishStates`) — the host API allows 300 states per minute.
+- **Commands reflected at once**: an accepted command publishes the new value immediately, then the
+  device is re-read 3 s later to confirm. A command that must echo other current settings
+  (`acOutCfg`, `watthConfig`) re-reads the unit first and is never sent with a made-up default.
+- **Features** (`src/ecoflow/quota.js`, shared by both transports): battery level, AC charging
+  power, total output power, AC output power, solar input power, discharge remaining time,
+  charging (read-only), and AC output / X-Boost / DC output / backup reserve (switches).
+- **Gladys 5.1 surfaces**: a dashboard widget (`src/widget.js`), five scene triggers — wall power
+  lost/restored, station offline/online, charge limit reached (`src/devices/events.js`) — and five
+  scene actions for the numeric settings that have no feature type: charge/discharge limit, backup
+  reserve, AC charging power/pause, and an on-demand read (`src/sceneActions.js`).
+- **Honest status**: per-device transport badges (`cloud`, `cloud` + degraded, `unreachable`) and a
+  connection status that reports each method separately after actually trying it.
+- **Command shapes shared across both transports** (`src/ecoflow/commands.js`), each validated
+  against `@ecoflow-api/schemas`' real zod schemas before being sent.
 
 ## New to this codebase? Start here
 
@@ -57,23 +56,22 @@ An "external integration" is a small Node.js program Gladys runs as its own Dock
 talking to the Gladys hub over one WebSocket (handled by the SDK). Recommended reading order:
 
 1. [`src/ecoflow/signing.js`](./src/ecoflow/signing.js) — no I/O: the HMAC-SHA256 request signing
-   for Method 1, cross-confirmed against two independent reference implementations (see its header).
-2. [`src/ecoflow/client.js`](./src/ecoflow/client.js) — Method 1's REST transport (device list,
-   quota snapshot, set command), built on that signing.
+   for Method 1, cross-confirmed against two independent reference implementations.
+2. [`src/ecoflow/client.js`](./src/ecoflow/client.js) — Method 1's REST transport.
 3. [`src/ecoflow/privateClient.js`](./src/ecoflow/privateClient.js) — Method 2's transport: login,
-   MQTT connection, the `latestQuotas` request/reply round-trip, and publishing a command — read
-   its header for the full trade-offs of this method and how the wire format was confirmed.
-4. [`src/ecoflow/commands.js`](./src/ecoflow/commands.js) — the River 2 family's command builders,
-   shared by both transports, each validated against `@ecoflow-api/schemas`.
-5. [`src/ecoflow/quota.js`](./src/ecoflow/quota.js) — PURE: EcoFlow's flat dotted-key quota format
-   <-> Gladys device features, reused unchanged by both transports.
-6. [`src/devices/device.js`](./src/devices/device.js) — the glue: discovery payloads, the
-   `external_id -> { sn, transport, lastQuota }` registry, `onSetValue`/`test_connection`.
-7. [`src/devices/index.js`](./src/devices/index.js) — device-list refresh, manual-SN registration,
-   and the poll loop; `transportForSn()` decides which method backs a given serial number.
-8. [`src/config.js`](./src/config.js) — config defaults + normalization for both methods.
-9. [`index.js`](./index.js) — the entry point: SDK bootstrap, building whichever transport(s) are
-   configured, poll timer lifecycle, event wiring.
+   the MQTT session rules, the `latestQuotas` request/reply round-trip.
+4. [`src/ecoflow/commands.js`](./src/ecoflow/commands.js) — command builders, schema-validated.
+5. [`src/ecoflow/quota.js`](./src/ecoflow/quota.js) — PURE: quota <-> Gladys features, and the
+   `summarizeQuota()` view used by the widget, triggers and scene actions.
+6. [`src/devices/device.js`](./src/devices/device.js) — the registry, deduplicated state
+   publishing, transport badges, `onSetValue` and the manifest actions.
+7. [`src/devices/index.js`](./src/devices/index.js) — device lists, routing (`transportForSn()`),
+   the poll loop.
+8. [`src/devices/events.js`](./src/devices/events.js) — PURE: scene trigger detection.
+9. [`src/widget.js`](./src/widget.js) / [`src/sceneActions.js`](./src/sceneActions.js) — the Gladys
+   5.1 widget content and scene action handlers.
+10. [`src/app.js`](./src/app.js) — the orchestration: configuration lifecycle, connection status,
+    poll scheduling, event wiring. [`index.js`](./index.js) only bootstraps the SDK.
 
 ## Dependencies
 
@@ -131,35 +129,45 @@ behavior change in any of these packages the way a real-SDK smoke-import job cou
 bump here would mean sending a wrong command to a real power station — left for a human to review,
 every time.
 
-**Automatic releases** (`.github/workflows/auto-release.yml`): the moment a Dependabot PR actually
-merges (auto or by hand), a patch release is cut and its multi-arch image published automatically
-— no manual "Run workflow" click needed for the dependency-update path. `.github/workflows/release.yml`
+**Automatic releases** (`.github/workflows/auto-release.yml`): the moment a Dependabot PR that
+changes the shipped image merges (base image, runtime or transitive npm dependency), a patch release
+is cut and its multi-arch image published automatically. Dev-dependency and GitHub Actions updates
+cut no release: they change nothing for users.
+
+**Base image**: `node:24-alpine` (the LTS line the Gladys core runs on), pinned by digest — security
+rebuilds arrive as Dependabot digest PRs; Node majors are bumped by hand.
+
+**CI** (`.github/workflows/ci.yml`): Prettier, ESLint and the tests with coverage thresholds on
+Node 22 and 24, `npm audit` of the runtime dependencies, the official Gladys store validator, and a
+Docker build for amd64 and arm64. `.github/workflows/release.yml`
 is still there for a deliberate minor/major release, run by hand from the Actions tab.
 
 ## Project structure
 
 ```
 .
-├─ index.js                    # SDK bootstrap, transport wiring, poll timer lifecycle, event wiring
+├─ index.js                    # bootstraps the SDK client, nothing else
 ├─ src/
+│  ├─ app.js                   # orchestration: config lifecycle, status, polling, event wiring
+│  ├─ widget.js                # PURE: the dashboard widget content (Gladys 5.1)
+│  ├─ sceneActions.js          # scene action handlers (Gladys 5.1)
 │  ├─ ecoflow/
 │  │  ├─ signing.js            # PURE: HMAC-SHA256 request signing (Method 1)
-│  │  ├─ client.js             # Method 1: official REST transport, @ecoflow-api/schemas-validated
-│  │  ├─ privateClient.js      # Method 2: simple login + MQTT transport (unofficial, see its header)
-│  │  ├─ commands.js           # River 2 family command builders, shared by both transports
-│  │  └─ quota.js              # PURE: EcoFlow quota <-> Gladys features, shared by both transports
+│  │  ├─ client.js             # Method 1: official REST transport
+│  │  ├─ privateClient.js      # Method 2: simple login + MQTT transport (unofficial)
+│  │  ├─ commands.js           # command builders, shared by both transports
+│  │  └─ quota.js              # PURE: EcoFlow quota <-> Gladys features + quota summary
 │  ├─ devices/
-│  │  ├─ device.js             # discovery payloads, the sn/transport/lastQuota registry, actions
-│  │  └─ index.js              # device-list refresh, manual-SN registration, the poll loop
+│  │  ├─ device.js             # registry, state publishing, transport badges, actions
+│  │  ├─ events.js             # PURE: scene trigger detection
+│  │  └─ index.js              # device lists, routing, the poll loop
 │  └─ config.js                # config defaults + normalization for both methods
-├─ test/                       # one *.test.js per src/ file above, node --test, no library
-├─ test-fixtures/
-│  ├─ fakeGladys.js            # minimal in-memory stand-in for the SDK client, used by tests
-│  └─ fakeTransport.js         # minimal stand-in for the shared transport shape
+├─ test/                       # node --test, no library; app.test.js drives src/app.js
+├─ test-fixtures/              # fake SDK client and fake transport
 ├─ docs/
 │  └─ en.md / fr.md            # END-USER documentation, re-hosted by Gladys itself in its UI
-├─ gladys-assistant-integration.json  # the manifest: name, version, Docker image, config form, actions
-├─ Dockerfile                  # single-stage: no local device protocol, no Python bridge needed
+├─ gladys-assistant-integration.json  # the manifest: config form, actions, widget, scenes
+├─ Dockerfile                  # single stage, node:24-alpine pinned by digest
 └─ cover.jpg                   # catalog cover (JPEG: Gladys caps this at 150 KB)
 ```
 
@@ -181,6 +189,7 @@ npm run format:check   # Prettier
 npm run format          # Prettier, write
 npm run lint             # ESLint
 npm test                 # node --test
+npm run test:coverage    # node --test + coverage thresholds (as in CI)
 ```
 
 `test/signing.test.js` is a genuine round-trip check: every expected signature is computed
@@ -209,22 +218,19 @@ the full publishing flow.
 
 ## Scope
 
-Discovery (both methods), battery level, AC charging power, total output power, AC output power,
-solar input power, and four binary switches (AC output, X-Boost, DC output, backup reserve) — built
-once for the whole River 2 family rather than per-model, shared by both onboarding methods.
-Deliberately out of scope for now: numeric charge/discharge-limit and backup-reserve-level
-settings, and real-time MQTT push for Method 1 — see `docs/en.md`'s "Possible follow-ups" for why
-and what each would need.
+Discovery (both methods), seven sensors, four switches, a dashboard widget, five scene triggers and
+five scene actions — built once for the whole River 2 family, shared by both onboarding methods.
+Not done yet: real-time MQTT push for Method 1, other EcoFlow models, and moving the AC input power
+to Gladys' "grid" energy category — see `docs/en.md`'s "Possible follow-ups".
 
 ## Tested and confirmed
 
-See `docs/en.md`'s own "Tested and confirmed" section for the full, honest breakdown — in short:
-**no EcoFlow account (developer or app) and no physical River 2 unit were available while writing
-this integration.** Both transports' wire formats are cross-confirmed against independent,
-live-used reference implementations (read, not executed) and this repo's own test suite (80+
-tests, all exercising real logic — no network, no live EcoFlow account, no real MQTT broker). What
-genuinely isn't confirmed yet: behavior against a real account and a real device, through either
-method. Please test with `LOG_LEVEL=debug` and open an issue for anything that looks off.
+See `docs/en.md`'s "Tested and confirmed" section for the full breakdown — in short: Method 2 was
+tested by the maintainer on a real River 2 Pro; both transports' wire formats are cross-confirmed
+against independent, live-used reference implementations; this repo's own test suite (160+ tests,
+no network, no real EcoFlow account, no real MQTT broker) covers the orchestration too. Not yet
+confirmed on a real unit: the scene actions, the wall-power detection from `inv.acInVol` and the
+remaining-time field. Run the **Diagnostics** action and open an issue for anything that looks off.
 
 ## License
 

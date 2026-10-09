@@ -8,7 +8,7 @@
   },
   "version": "0.2.5",
   "docker_image": "ghcr.io/lm1lc3n7/gladys-ecoflow:0.2.5",
-  "gladys_version": ">=4.86.1",
+  "gladys_version": ">=5.1.0",
   "cover_image": "https://raw.githubusercontent.com/LM1LC3N7/gladys-ecoflow/main/cover.jpg",
   "categories": ["energy"],
   "transports": ["cloud"],
@@ -176,6 +176,444 @@
             "fr": "Station d'énergie"
           },
           "required": true
+        }
+      ]
+    },
+    {
+      "key": "diagnostics",
+      "label": {
+        "en": "Diagnostics (telemetry keys)",
+        "fr": "Diagnostic (clés de télémétrie)"
+      },
+      "timeout_seconds": 20,
+      "fields": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Power station",
+            "fr": "Station d'énergie"
+          },
+          "required": true
+        }
+      ]
+    }
+  ],
+  "widgets": [
+    {
+      "key": "power_station",
+      "label": {
+        "en": "EcoFlow power station",
+        "fr": "Station EcoFlow"
+      },
+      "icon": "battery-charging",
+      "settings": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Power station",
+            "fr": "Station d'énergie"
+          },
+          "required": true
+        }
+      ],
+      "action_timeout_seconds": 30
+    }
+  ],
+  "scene_triggers": [
+    {
+      "key": "ac_input_lost",
+      "label": {
+        "en": "EcoFlow: wall power lost",
+        "fr": "EcoFlow : coupure de l'entrée secteur"
+      },
+      "fields": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Power station",
+            "fr": "Station d'énergie"
+          },
+          "required": false
+        }
+      ],
+      "variables": [
+        {
+          "key": "battery_level",
+          "type": "number",
+          "label": {
+            "en": "Battery level (%)",
+            "fr": "Niveau de batterie (%)"
+          }
+        },
+        {
+          "key": "output_watts",
+          "type": "number",
+          "label": {
+            "en": "Total output power (W)",
+            "fr": "Puissance de sortie totale (W)"
+          }
+        }
+      ]
+    },
+    {
+      "key": "ac_input_restored",
+      "label": {
+        "en": "EcoFlow: wall power restored",
+        "fr": "EcoFlow : retour de l'entrée secteur"
+      },
+      "fields": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Power station",
+            "fr": "Station d'énergie"
+          },
+          "required": false
+        }
+      ],
+      "variables": [
+        {
+          "key": "battery_level",
+          "type": "number",
+          "label": {
+            "en": "Battery level (%)",
+            "fr": "Niveau de batterie (%)"
+          }
+        },
+        {
+          "key": "output_watts",
+          "type": "number",
+          "label": {
+            "en": "Total output power (W)",
+            "fr": "Puissance de sortie totale (W)"
+          }
+        }
+      ]
+    },
+    {
+      "key": "device_offline",
+      "label": {
+        "en": "EcoFlow: station stopped answering",
+        "fr": "EcoFlow : la station ne répond plus"
+      },
+      "fields": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Power station",
+            "fr": "Station d'énergie"
+          },
+          "required": false
+        }
+      ],
+      "variables": [
+        {
+          "key": "battery_level",
+          "type": "number",
+          "label": {
+            "en": "Battery level (%)",
+            "fr": "Niveau de batterie (%)"
+          }
+        },
+        {
+          "key": "output_watts",
+          "type": "number",
+          "label": {
+            "en": "Total output power (W)",
+            "fr": "Puissance de sortie totale (W)"
+          }
+        }
+      ]
+    },
+    {
+      "key": "device_online",
+      "label": {
+        "en": "EcoFlow: station answering again",
+        "fr": "EcoFlow : la station répond à nouveau"
+      },
+      "fields": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Power station",
+            "fr": "Station d'énergie"
+          },
+          "required": false
+        }
+      ],
+      "variables": [
+        {
+          "key": "battery_level",
+          "type": "number",
+          "label": {
+            "en": "Battery level (%)",
+            "fr": "Niveau de batterie (%)"
+          }
+        },
+        {
+          "key": "output_watts",
+          "type": "number",
+          "label": {
+            "en": "Total output power (W)",
+            "fr": "Puissance de sortie totale (W)"
+          }
+        }
+      ]
+    },
+    {
+      "key": "charge_completed",
+      "label": {
+        "en": "EcoFlow: charge limit reached",
+        "fr": "EcoFlow : limite de charge atteinte"
+      },
+      "fields": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Power station",
+            "fr": "Station d'énergie"
+          },
+          "required": false
+        }
+      ],
+      "variables": [
+        {
+          "key": "battery_level",
+          "type": "number",
+          "label": {
+            "en": "Battery level (%)",
+            "fr": "Niveau de batterie (%)"
+          }
+        },
+        {
+          "key": "output_watts",
+          "type": "number",
+          "label": {
+            "en": "Total output power (W)",
+            "fr": "Puissance de sortie totale (W)"
+          }
+        }
+      ]
+    }
+  ],
+  "scene_actions": [
+    {
+      "key": "set_charge_limit",
+      "label": {
+        "en": "EcoFlow: set the charge limit",
+        "fr": "EcoFlow : régler la limite de charge"
+      },
+      "timeout_seconds": 20,
+      "fields": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Power station",
+            "fr": "Station d'énergie"
+          },
+          "required": true
+        },
+        {
+          "key": "max_percent",
+          "type": "number",
+          "label": {
+            "en": "Max charge level (%)",
+            "fr": "Niveau de charge max (%)"
+          },
+          "required": true,
+          "min": 50,
+          "max": 100
+        }
+      ]
+    },
+    {
+      "key": "set_discharge_limit",
+      "label": {
+        "en": "EcoFlow: set the discharge limit",
+        "fr": "EcoFlow : régler la limite de décharge"
+      },
+      "timeout_seconds": 20,
+      "fields": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Power station",
+            "fr": "Station d'énergie"
+          },
+          "required": true
+        },
+        {
+          "key": "min_percent",
+          "type": "number",
+          "label": {
+            "en": "Min discharge level (%)",
+            "fr": "Niveau de décharge min (%)"
+          },
+          "required": true,
+          "min": 0,
+          "max": 30
+        }
+      ]
+    },
+    {
+      "key": "set_backup_reserve",
+      "label": {
+        "en": "EcoFlow: set the backup reserve",
+        "fr": "EcoFlow : régler la réserve de secours"
+      },
+      "timeout_seconds": 20,
+      "fields": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Power station",
+            "fr": "Station d'énergie"
+          },
+          "required": true
+        },
+        {
+          "key": "enabled",
+          "type": "boolean",
+          "label": {
+            "en": "Reserve enabled",
+            "fr": "Réserve activée"
+          },
+          "required": true,
+          "default": true
+        },
+        {
+          "key": "level",
+          "type": "number",
+          "label": {
+            "en": "Reserve level (%) — empty keeps the current one",
+            "fr": "Niveau de réserve (%) — vide conserve l'actuel"
+          },
+          "required": false,
+          "min": 5,
+          "max": 100
+        }
+      ]
+    },
+    {
+      "key": "set_ac_charging",
+      "label": {
+        "en": "EcoFlow: set AC charging",
+        "fr": "EcoFlow : régler la charge secteur"
+      },
+      "timeout_seconds": 20,
+      "fields": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Power station",
+            "fr": "Station d'énergie"
+          },
+          "required": true
+        },
+        {
+          "key": "watts",
+          "type": "number",
+          "label": {
+            "en": "AC charging power (W)",
+            "fr": "Puissance de charge secteur (W)"
+          },
+          "required": true,
+          "min": 100,
+          "max": 1200
+        },
+        {
+          "key": "paused",
+          "type": "boolean",
+          "label": {
+            "en": "Pause AC charging",
+            "fr": "Mettre la charge secteur en pause"
+          },
+          "required": false,
+          "default": false
+        }
+      ]
+    },
+    {
+      "key": "refresh",
+      "label": {
+        "en": "EcoFlow: read the station now",
+        "fr": "EcoFlow : relever la station maintenant"
+      },
+      "timeout_seconds": 20,
+      "fields": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Power station",
+            "fr": "Station d'énergie"
+          },
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "key": "battery_level",
+          "type": "number",
+          "label": {
+            "en": "Battery level (%)",
+            "fr": "Niveau de batterie (%)"
+          }
+        },
+        {
+          "key": "remaining_minutes",
+          "type": "number",
+          "label": {
+            "en": "Discharge remaining time (min)",
+            "fr": "Autonomie restante (min)"
+          }
+        },
+        {
+          "key": "input_watts",
+          "type": "number",
+          "label": {
+            "en": "Total input power (W)",
+            "fr": "Puissance d'entrée totale (W)"
+          }
+        },
+        {
+          "key": "output_watts",
+          "type": "number",
+          "label": {
+            "en": "Total output power (W)",
+            "fr": "Puissance de sortie totale (W)"
+          }
+        },
+        {
+          "key": "charging",
+          "type": "boolean",
+          "label": {
+            "en": "Charging",
+            "fr": "En charge"
+          }
         }
       ]
     }

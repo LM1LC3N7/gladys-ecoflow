@@ -5,6 +5,8 @@ import { createFakeTransport } from '../test-fixtures/fakeTransport.js';
 import { FEATURE, featureExternalId } from '../src/ecoflow/quota.js';
 import {
   DEVICE_TYPE,
+  METHOD,
+  getRegisteredDevice,
   registerDevice,
   __clearConnectionsForTesting,
 } from '../src/devices/device.js';
@@ -14,6 +16,7 @@ import {
   buildPrivateDiscoveredDevices,
   reconcileConnections,
   transportForSn,
+  methodForSn,
   pollOnce,
 } from '../src/devices/index.js';
 
@@ -109,4 +112,42 @@ test('pollOnce polls every registered device and keeps going after one fails', a
       state: 99,
     },
   ]);
+});
+
+test('methodForSn mirrors transportForSn', () => {
+  const transports = { privateDeviceSns: ['R331PRIVATE'] };
+  assert.equal(methodForSn('R331PRIVATE', transports), METHOD.SIMPLE);
+  assert.equal(methodForSn('R331PUBLIC', transports), METHOD.OFFICIAL);
+});
+
+test('reconcileConnections records the method and the official online flag', async () => {
+  const gladys = createFakeGladys();
+  await gladys.publishDiscoveredDevices([
+    { external_id: `${DEVICE_TYPE}:R331PUB`, params: [{ name: 'ECOFLOW_SN', value: 'R331PUB' }] },
+  ]);
+  await reconcileConnections(
+    gladys,
+    { publicTransport: createFakeTransport(), privateTransport: null, privateDeviceSns: [] },
+    { onlineBySn: new Map([['R331PUB', false]]) },
+  );
+  const entry = getRegisteredDevice(`${DEVICE_TYPE}:R331PUB`);
+  assert.equal(entry.method, METHOD.OFFICIAL);
+  assert.equal(entry.health.online, false);
+});
+
+test('pollOnce returns one result per device and tracks consecutive failures', async () => {
+  const gladys = createFakeGladys();
+  const failing = {
+    async getQuota() {
+      throw new Error('boom');
+    },
+  };
+  registerDevice(`${DEVICE_TYPE}:BAD`, 'SN_BAD', failing);
+
+  const [first] = await pollOnce(gladys);
+  await pollOnce(gladys);
+
+  assert.equal(first.ok, false);
+  assert.equal(first.error.message, 'boom');
+  assert.equal(getRegisteredDevice(`${DEVICE_TYPE}:BAD`).health.failures, 2);
 });
