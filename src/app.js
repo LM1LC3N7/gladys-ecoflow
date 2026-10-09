@@ -134,9 +134,11 @@ export function createApp(
   async function publishEvent({ key, data }) {
     try {
       await gladys.publishSceneEvent(key, data);
-      logger.info(`Scene event ${key} for ${data.device}`);
+      logger.info(`Scene event ${key} sent: ${JSON.stringify(data)}`);
     } catch (err) {
-      logger.warn(`publishSceneEvent(${key}) failed: ${err.message}`);
+      logger.warn(
+        `publishSceneEvent(${key}) failed: ${err.message} — data: ${JSON.stringify(data)}`,
+      );
     }
   }
 

@@ -41,8 +41,8 @@ operateType, params) }`, implemented by `createPublicTransport()` (`src/ecoflow/
 - **Features** (`src/ecoflow/quota.js`, shared by both transports): battery level, AC charging
   power, total output power, AC output power, solar input power, discharge remaining time,
   charging (read-only), and AC output / X-Boost / DC output / backup reserve (switches).
-- **Gladys 5.1 surfaces**: a dashboard widget (`src/widget.js`), five scene triggers — wall power
-  lost/restored, station offline/online, charge limit reached (`src/devices/events.js`) — and five
+- **Gladys 5.1 surfaces**: a dashboard widget (`src/widget.js`), six scene triggers — wall power
+  lost/restored, station offline/online, charge limit reached, battery low (`src/devices/events.js`) — and five
   scene actions for the numeric settings that have no feature type: charge/discharge limit, backup
   reserve, AC charging power/pause, and an on-demand read (`src/sceneActions.js`).
 - **Honest status**: per-device transport badges (`cloud`, `cloud` + degraded, `unreachable`) and a
@@ -218,7 +218,7 @@ the full publishing flow.
 
 ## Scope
 
-Discovery (both methods), seven sensors, four switches, a dashboard widget, five scene triggers and
+Discovery (both methods), seven sensors, four switches, a dashboard widget, six scene triggers and
 five scene actions — built once for the whole River 2 family, shared by both onboarding methods.
 Not done yet: real-time MQTT push for Method 1, other EcoFlow models, and moving the AC input power
 to Gladys' "grid" energy category — see `docs/en.md`'s "Possible follow-ups".

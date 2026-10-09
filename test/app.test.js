@@ -363,3 +363,34 @@ test('a Discovery scan publishes every configured device once', async () => {
     [DEVICE],
   );
 });
+
+test('every scene event is logged with its data', async () => {
+  const lines = [];
+  const logger = {
+    info: (line) => lines.push(line),
+    warn: (line) => lines.push(line),
+    error: () => {},
+    debug: () => {},
+  };
+  const gladys = createFakeGladys({ config: PRIVATE_CONFIG, devices: [createdDevice] });
+  const transport = createFakeTransport({
+    quotaBySn: { [SN]: { 'inv.acInVol': 230000, 'pd.soc': 80 } },
+  });
+  const app = createApp(gladys, {
+    timers: createFakeTimers(),
+    logger,
+    createPrivateTransport: () => transport,
+    createPublicTransport: () => createFakeTransport(),
+  });
+  await gladys.emit('connected');
+
+  transport.quotaBySn[SN] = { 'inv.acInVol': 0, 'pd.soc': 80, 'pd.wattsOutSum': 90 };
+  await app.pollNow();
+
+  assert.ok(
+    lines.includes(
+      `Scene event ac_input_lost sent: {"device":"${DEVICE}","battery_level":80,"output_watts":90}`,
+    ),
+    lines.join('\n'),
+  );
+});

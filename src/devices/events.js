@@ -1,7 +1,8 @@
 // -----------------------------------------------------------------------------
 // PURE: scene trigger detection — one event per TRANSITION, never one per
-// poll (Gladys doctrine: "state vs event"; thresholds like "battery < 20 %"
-// stay on the core's standard device-state triggers on the features).
+// poll (Gladys doctrine: "state vs event"). Arbitrary thresholds stay on the
+// core's standard device-state trigger on the features; `battery_low` only
+// reports the crossing of a few fixed levels, chosen in the trigger filter.
 //
 // Keys declared in the manifest `scene_triggers` (keys are forever — never
 // rename one):
@@ -9,6 +10,9 @@
 //   - ac_input_lost / ac_input_restored the wall socket went dead / came back
 //                                       (power outage on a unit used as UPS)
 //   - charge_completed                 the battery reached its charge limit
+//   - battery_low                      the battery fell to one of
+//                                       BATTERY_LOW_THRESHOLDS (the crossed
+//                                       level is the `threshold` filter)
 //
 // The first observation of a device only seeds the state: restarting the
 // integration must never fire "restored" or "online" for a state that never
@@ -21,7 +25,15 @@ export const SCENE_TRIGGER = {
   AC_INPUT_LOST: 'ac_input_lost',
   AC_INPUT_RESTORED: 'ac_input_restored',
   CHARGE_COMPLETED: 'charge_completed',
+  BATTERY_LOW: 'battery_low',
 };
+
+/** Levels (%) whose downward crossing fires `battery_low` (manifest filter options). */
+export const BATTERY_LOW_THRESHOLDS = [50, 30, 20, 10, 5];
+
+// A threshold fires once, then re-arms only when the battery climbs back
+// this many points above it: a level wavering around 20 % never fires twice.
+const BATTERY_LOW_REARM_MARGIN = 5;
 
 // Consecutive identical observations needed before an AC input change is
 // believed: one when the unit reports its input voltage (unambiguous), two
@@ -34,6 +46,8 @@ export function createEventState() {
     reachable: undefined,
     acInput: { confirmed: undefined, pending: undefined, count: 0 },
     batteryLevel: undefined,
+    // threshold -> armed (fires on the next crossing); seeded on first level
+    batteryLowArmed: undefined,
   };
 }
 
@@ -43,6 +57,35 @@ function eventData(externalId, summary) {
     battery_level: summary?.batteryLevel ?? null,
     output_watts: summary?.outputWatts ?? null,
   };
+}
+
+/** `battery_low` events for the thresholds the level just fell to (or below). */
+function detectBatteryLow(state, externalId, summary) {
+  const level = summary.batteryLevel;
+  if (!state.batteryLowArmed) {
+    // First level seen: arm only the thresholds still above it, so a station
+    // already at 15 % does not fire 20/30/50 when the integration starts.
+    state.batteryLowArmed = new Map(BATTERY_LOW_THRESHOLDS.map((t) => [t, level > t]));
+    return [];
+  }
+  const events = [];
+  for (const threshold of BATTERY_LOW_THRESHOLDS) {
+    const armed = state.batteryLowArmed.get(threshold);
+    if (armed && level <= threshold) {
+      state.batteryLowArmed.set(threshold, false);
+      events.push({
+        key: SCENE_TRIGGER.BATTERY_LOW,
+        data: {
+          ...eventData(externalId, summary),
+          threshold,
+          remaining_minutes: summary.remainingMinutes ?? null,
+        },
+      });
+    } else if (!armed && level >= threshold + BATTERY_LOW_REARM_MARGIN) {
+      state.batteryLowArmed.set(threshold, true);
+    }
+  }
+  return events;
 }
 
 /**
@@ -104,6 +147,7 @@ export function detectEvents(state, { externalId, reachable, summary }) {
       events.push({ key: SCENE_TRIGGER.CHARGE_COMPLETED, data: eventData(externalId, summary) });
     }
     state.batteryLevel = level;
+    events.push(...detectBatteryLow(state, externalId, summary));
   }
 
   return events;

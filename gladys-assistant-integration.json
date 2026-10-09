@@ -408,6 +408,105 @@
           }
         }
       ]
+    },
+    {
+      "key": "battery_low",
+      "label": {
+        "en": "EcoFlow: battery low",
+        "fr": "EcoFlow : batterie faible"
+      },
+      "fields": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Power station",
+            "fr": "Station d'énergie"
+          },
+          "required": false
+        },
+        {
+          "key": "threshold",
+          "type": "select",
+          "required": false,
+          "label": {
+            "en": "Level reached",
+            "fr": "Niveau atteint"
+          },
+          "options": [
+            {
+              "value": "50",
+              "label": {
+                "en": "50 %",
+                "fr": "50 %"
+              }
+            },
+            {
+              "value": "30",
+              "label": {
+                "en": "30 %",
+                "fr": "30 %"
+              }
+            },
+            {
+              "value": "20",
+              "label": {
+                "en": "20 %",
+                "fr": "20 %"
+              }
+            },
+            {
+              "value": "10",
+              "label": {
+                "en": "10 %",
+                "fr": "10 %"
+              }
+            },
+            {
+              "value": "5",
+              "label": {
+                "en": "5 %",
+                "fr": "5 %"
+              }
+            }
+          ]
+        }
+      ],
+      "variables": [
+        {
+          "key": "battery_level",
+          "type": "number",
+          "label": {
+            "en": "Battery level (%)",
+            "fr": "Niveau de batterie (%)"
+          }
+        },
+        {
+          "key": "output_watts",
+          "type": "number",
+          "label": {
+            "en": "Total output power (W)",
+            "fr": "Puissance de sortie totale (W)"
+          }
+        },
+        {
+          "key": "threshold",
+          "type": "number",
+          "label": {
+            "en": "Level reached (%)",
+            "fr": "Niveau atteint (%)"
+          }
+        },
+        {
+          "key": "remaining_minutes",
+          "type": "number",
+          "label": {
+            "en": "Discharge remaining time (min)",
+            "fr": "Autonomie restante (min)"
+          }
+        }
+      ]
     }
   ],
   "scene_actions": [

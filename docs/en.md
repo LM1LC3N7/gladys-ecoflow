@@ -75,17 +75,21 @@ EcoFlow section) and pick a station in its settings. It shows:
 (empty = any station) and the variables _battery level_ and _total output
 power_:
 
-| Trigger                   | When it fires                                                     |
-| ------------------------- | ----------------------------------------------------------------- |
-| Wall power lost           | the AC input goes dead — e.g. a power cut on a unit used as a UPS |
-| Wall power restored       | the AC input comes back                                           |
-| Station stopped answering | offline in the EcoFlow cloud, or 3 failed refreshes in a row      |
-| Station answering again   | back from the state above                                         |
-| Charge limit reached      | the battery reaches its charge limit (100 % by default)           |
+| Trigger                   | When it fires                                                                                                                                                 |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Wall power lost           | the AC input goes dead — e.g. a power cut on a unit used as a UPS                                                                                             |
+| Wall power restored       | the AC input comes back                                                                                                                                       |
+| Station stopped answering | offline in the EcoFlow cloud, or 3 failed refreshes in a row                                                                                                  |
+| Station answering again   | back from the state above                                                                                                                                     |
+| Charge limit reached      | the battery reaches its charge limit (100 % by default)                                                                                                       |
+| Battery low               | the battery falls to 50, 30, 20, 10 or 5 % — pick the level in the _Level reached_ filter (empty = any); extra variables _level reached_ and _remaining time_ |
 
-Each fires once per change, never at every refresh. Thresholds such as
-"battery below 20 %" or "remaining time below 30 min" need no special
-trigger: use Gladys' standard device-state trigger on the matching feature.
+Each fires once per change, never at every refresh. "Battery low" fires again
+only after the battery climbed 5 points back above that level. For any other
+threshold ("battery below 25 %", "remaining time below 30 min"), use Gladys'
+standard trigger: _A device state changes_ → the station's _Battery level_
+(or _Discharge remaining time_) feature → `<` and your value, with the option
+to trigger only when the threshold is crossed.
 
 **Actions** (scene editor → "Then…"):
 
