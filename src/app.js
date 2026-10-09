@@ -266,7 +266,7 @@ export function createApp(
         } else {
           report.en.push('Official API reached, but no device is bound to this developer account');
           report.fr.push(
-            'API officielle jointe, mais aucun appareil n'est lié à ce compte développeur',
+            "API officielle jointe, mais aucun appareil n'est lié à ce compte développeur",
           );
         }
       } catch (err) {
