@@ -1,15 +1,15 @@
 # -----------------------------------------------------------------------------
 # Continuous integration: runs on every push to main and every pull request.
 #
-# Two independent jobs:
-#   1. quality -> Prettier, ESLint, `node --test`.
-#   2. docker  -> `docker build .`, no push. Without this job a Dockerfile
-#      change (base image bump, a COPY typo...) goes green on `quality` alone
-#      and is only ever actually built the day someone cuts a release — this
-#      catches it on every PR instead.
-#
-# Runs on Node 22, the version the Docker image ships with (see the
-# Dockerfile), so the check exercises the exact runtime the integration runs on.
+# Jobs:
+#   1. quality  -> Prettier, ESLint, `node --test` with coverage thresholds,
+#                  on Node 24 (the Docker image's runtime) and Node 22 (the
+#                  lowest version package.json's `engines` accepts);
+#   2. audit    -> `npm audit` on the runtime dependencies shipped in the image;
+#   3. manifest -> the official Gladys store validator, the same checks the
+#                  store indexer runs (manifest schema, cover, documentation);
+#   4. docker   -> `docker build` for linux/amd64 AND linux/arm64, no push —
+#                  a Dockerfile change is caught on the PR, not on release day.
 # -----------------------------------------------------------------------------
 name: CI
 
@@ -19,10 +19,16 @@ on:
       - main
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   quality:
     runs-on: ubuntu-latest
-    name: Lint & test
+    name: Lint & test (Node ${{ matrix.node-version }})
+    strategy:
+      matrix:
+        node-version: [22, 24]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -30,7 +36,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: ${{ matrix.node-version }}
           cache: npm
 
       - name: Install dependencies
@@ -42,18 +48,55 @@ jobs:
       - name: Lint (ESLint)
         run: npm run lint
 
-      - name: Run tests
-        run: npm test
+      - name: Run tests with coverage thresholds
+        run: npm run test:coverage
 
-  docker:
+  audit:
     runs-on: ubuntu-latest
-    name: Docker build
+    name: Runtime dependency audit
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: npm audit (runtime dependencies)
+        run: npm audit --omit=dev --audit-level=moderate
+
+  manifest:
+    runs-on: ubuntu-latest
+    name: Gladys store validation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Validate the manifest like the store indexer does
+        run: npx --yes github:GladysAssistant/integration-store .
+
+  docker:
+    runs-on: ubuntu-latest
+    name: Docker build (amd64 + arm64)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
 
       - name: Build the image (no push)
         uses: docker/build-push-action@v7
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           push: false

@@ -33,6 +33,9 @@
 
 import { randomUUID } from 'node:crypto';
 import mqtt from 'mqtt';
+import { createLogger } from '@gladysassistant/integration-sdk';
+
+const logger = createLogger({ name: 'ecoflow-private' });
 
 const API_HOST = 'https://api.ecoflow.com';
 const QUOTA_REPLY_TIMEOUT_MS = 10_000;
@@ -99,22 +102,51 @@ export function snFromGetReplyTopic(topic, userId) {
 }
 
 /**
- * The private-API transport: `{ getQuota(sn), sendCommand(sn, moduleType,
- * operateType, params), disconnect() }` — same shape client.js's
+ * The private-API transport: `{ connect(), getQuota(sn), sendCommand(sn,
+ * moduleType, operateType, params), disconnect() }` — same shape client.js's
  * createPublicTransport() exposes (minus listDevices(), see this file's
  * header), so src/devices/ needn't know which one backs a given device.
- * Login + the MQTT connection are established lazily, on first use, and
- * reused across calls.
+ *
+ * Session rules:
+ *   - one login + MQTT connection at a time: concurrent callers share the
+ *     same in-flight connection attempt instead of each opening their own;
+ *   - a session whose client is no longer connected is ended BEFORE a fresh
+ *     one is opened, so a network blip never leaves an orphan client
+ *     reconnecting in the background;
+ *   - concurrent quota requests for the same device all resolve on the same
+ *     `get_reply` (the topic carries no request id to tell them apart);
+ *   - once disconnect() ran, the transport is closed for good: a transport
+ *     replaced after a configuration change can never log back in with the
+ *     old credentials.
  */
 export function createPrivateTransport(
   config,
   { fetchImpl = fetch, mqttConnect = mqtt.connectAsync } = {},
 ) {
   let session = null;
+  let connecting = null;
+  let closed = false;
 
-  async function ensureSession() {
-    if (session?.client?.connected) {
-      return session;
+  function failPending(s, error) {
+    for (const waiters of s.pending.values()) {
+      for (const waiter of waiters) {
+        clearTimeout(waiter.timer);
+        waiter.reject(error);
+      }
+    }
+    s.pending.clear();
+  }
+
+  async function endSession(s) {
+    failPending(s, new Error('EcoFlow MQTT session closed'));
+    await s.client.endAsync(true).catch(() => {});
+  }
+
+  async function openSession() {
+    if (session) {
+      const stale = session;
+      session = null;
+      await endSession(stale);
     }
     const { token, userId } = await login(config.private_username, config.private_password, {
       fetchImpl,
@@ -129,24 +161,59 @@ export function createPrivateTransport(
       reconnectPeriod: 5000,
       connectTimeout: 15000,
     });
-    const pending = new Map(); // sn -> { resolve, reject, timer }
+    const pending = new Map(); // sn -> [{ resolve, reject, timer }]
+    const opened = { userId, client, pending };
+    if (closed) {
+      await endSession(opened);
+      throw new Error('EcoFlow private transport is closed');
+    }
+    client.on('error', (err) => logger.warn(`EcoFlow MQTT error: ${err.message}`));
+    client.on('offline', () => logger.debug('EcoFlow MQTT connection lost, reconnecting'));
     client.on('message', (topic, payload) => {
       const sn = snFromGetReplyTopic(topic, userId);
-      const waiter = sn && pending.get(sn);
-      if (!waiter) {
+      const waiters = sn && pending.get(sn);
+      if (!waiters) {
         return;
       }
       pending.delete(sn);
-      clearTimeout(waiter.timer);
+      let quota;
       try {
         const data = JSON.parse(payload.toString('utf8'));
-        waiter.resolve(data?.operateType === 'latestQuotas' ? (data.data?.quotaMap ?? {}) : {});
+        quota = data?.operateType === 'latestQuotas' ? (data.data?.quotaMap ?? {}) : {};
       } catch (err) {
-        waiter.reject(err);
+        for (const waiter of waiters) {
+          clearTimeout(waiter.timer);
+          waiter.reject(err);
+        }
+        return;
+      }
+      for (const waiter of waiters) {
+        clearTimeout(waiter.timer);
+        waiter.resolve(quota);
       }
     });
-    session = { userId, client, pending };
-    return session;
+    session = opened;
+    return opened;
+  }
+
+  async function ensureSession() {
+    if (closed) {
+      throw new Error('EcoFlow private transport is closed');
+    }
+    if (session?.client?.connected) {
+      return session;
+    }
+    if (!connecting) {
+      connecting = openSession().finally(() => {
+        connecting = null;
+      });
+    }
+    return connecting;
+  }
+
+  /** Log in and open the MQTT session now (instead of on first use), to report credential errors early. */
+  async function connect() {
+    await ensureSession();
   }
 
   /** The full quota snapshot for one device: publish a `latestQuotas` request, await its reply. */
@@ -156,11 +223,24 @@ export function createPrivateTransport(
     await s.client.subscribeAsync(topics.getReply, { qos: 1 });
 
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        s.pending.delete(sn);
+      const waiter = { resolve, reject };
+      waiter.timer = setTimeout(() => {
+        const waiters = s.pending.get(sn) ?? [];
+        const remaining = waiters.filter((w) => w !== waiter);
+        if (remaining.length > 0) {
+          s.pending.set(sn, remaining);
+        } else {
+          s.pending.delete(sn);
+        }
         reject(new Error(`Timed out waiting for a quota reply from ${sn}`));
       }, QUOTA_REPLY_TIMEOUT_MS);
-      s.pending.set(sn, { resolve, reject, timer });
+      const waiters = s.pending.get(sn);
+      if (waiters) {
+        // A request for this device is already on the wire: share its reply.
+        waiters.push(waiter);
+        return;
+      }
+      s.pending.set(sn, [waiter]);
 
       const message = buildEnvelope({
         version: '1.1',
@@ -169,9 +249,12 @@ export function createPrivateTransport(
         params: {},
       });
       s.client.publishAsync(topics.get, JSON.stringify(message), { qos: 1 }).catch((err) => {
-        clearTimeout(timer);
+        const failed = s.pending.get(sn) ?? [];
         s.pending.delete(sn);
-        reject(err);
+        for (const w of failed) {
+          clearTimeout(w.timer);
+          w.reject(err);
+        }
       });
     });
   }
@@ -184,13 +267,19 @@ export function createPrivateTransport(
   }
 
   async function disconnect() {
-    if (session?.client) {
-      await session.client.endAsync();
+    closed = true;
+    const inFlight = connecting;
+    if (inFlight) {
+      await inFlight.catch(() => {});
     }
-    session = null;
+    if (session) {
+      const s = session;
+      session = null;
+      await endSession(s);
+    }
   }
 
-  return { getQuota, sendCommand, disconnect };
+  return { connect, getQuota, sendCommand, disconnect };
 }
 
 // Test-only: reset the module-local envelope id counter so a test asserting

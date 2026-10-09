@@ -7,6 +7,7 @@ import {
   isConfigured,
   isPublicConfigured,
   isPrivateConfigured,
+  invalidDeviceSns,
 } from '../src/config.js';
 
 test('normalizeConfig fills in defaults for an empty config', () => {
@@ -92,4 +93,14 @@ test('isConfigured is true when either method alone is configured', () => {
     ),
     true,
   );
+});
+
+test('private_device_sns are upper-cased and deduplicated case-insensitively', () => {
+  const config = normalizeConfig({ private_device_sns: 'r331abc12345678, R331ABC12345678' });
+  assert.deepEqual(config.privateDeviceSns, ['R331ABC12345678']);
+});
+
+test('invalidDeviceSns flags what does not look like an EcoFlow serial number', () => {
+  const config = normalizeConfig({ private_device_sns: 'R331ZEB4HFJC1234, my river, R3-31' });
+  assert.deepEqual(invalidDeviceSns(config), ['MY RIVER', 'R3-31']);
 });

@@ -1,17 +1,16 @@
 # -----------------------------------------------------------------------------
-# Cut a patch release automatically the moment a Dependabot PR actually
-# merges into main (whether merged by dependabot-auto-merge.yml or by a human
-# clicking merge on a Dependabot PR) — the "new releases ship on their own"
-# half of keeping dependencies current; see .github/workflows/
-# dependabot-auto-merge.yml for which PRs merge on their own in the first
-# place, and release.yml for the same version-bump logic driven by hand.
+# Cut a patch release automatically the moment a Dependabot PR that changes
+# the SHIPPED image merges into main (whether merged by
+# dependabot-auto-merge.yml or by a human): the Docker base image, a runtime
+# npm dependency, or a transitive one (security updates). Dev dependencies
+# and GitHub Actions bumps change nothing for users, so they cut no release —
+# otherwise every Gladys instance would show "update available" for nothing.
+# release.yml keeps the same version-bump logic for releases cut by hand.
 #
-# Triggered by `pull_request: closed`, not a push-to-main heuristic: a
-# squash-merge commit's reported author can vary by how it was merged, so
-# checking the PR event itself (github.event.pull_request.user.login,
-# github.event.pull_request.merged) is the only reliable way to fire exactly
-# once per actually-merged Dependabot PR, and only then — never on this
-# workflow's own release commit (that push has no associated PR at all).
+# Triggered by `pull_request: closed`, not a push-to-main heuristic: checking
+# the PR event itself (merged + author) fires exactly once per merged
+# Dependabot PR, never on this workflow's own release commit (that push has
+# no associated PR at all).
 # -----------------------------------------------------------------------------
 name: Auto-release dependency updates
 
@@ -25,22 +24,50 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: read
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v3
+        with:
+          github-token: '${{ secrets.GITHUB_TOKEN }}'
+
+      - name: Does this update change the shipped image?
+        id: scope
+        env:
+          ECOSYSTEM: ${{ steps.metadata.outputs.package-ecosystem }}
+          DEPENDENCY_TYPE: ${{ steps.metadata.outputs.dependency-type }}
+        run: |
+          runtime=false
+          case "$ECOSYSTEM" in
+            docker) runtime=true ;;
+            npm_and_yarn | npm) [ "$DEPENDENCY_TYPE" != "direct:development" ] && runtime=true ;;
+          esac
+          if [ "$runtime" = "true" ]; then
+            echo "runtime=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::${ECOSYSTEM} ${DEPENDENCY_TYPE} update: nothing shipped changes, no release."
+            echo "runtime=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout main
+        if: steps.scope.outputs.runtime == 'true'
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.base.ref }}
           fetch-depth: 0
 
       - name: Set up Node.js
+        if: steps.scope.outputs.runtime == 'true'
         uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
 
       - name: Bump version and update the manifest
         id: bump
+        if: steps.scope.outputs.runtime == 'true'
         run: |
           set -euo pipefail
 
@@ -87,7 +114,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.bump.outputs.version }}
-        run: gh release create "v${VERSION}" --generate-notes
+        run: gh release create "v${VERSION}" --generate-notes --repo "$GITHUB_REPOSITORY"
 
   build:
     needs: release

@@ -14,6 +14,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  acChargingSettingsSchema,
   acOutCfgSchema,
   mpptCarSchema,
   chargeLimitSchema,
@@ -27,6 +28,7 @@ import {
   setChargeLimit,
   setDischargeLimit,
   setBackupReserve,
+  setAcCharging,
 } from '../src/ecoflow/commands.js';
 
 test('setAcOutput sends a valid acOutCfg command (moduleType 5)', async () => {
@@ -90,4 +92,15 @@ test('an invalid params value throws locally instead of reaching the transport',
   const transport = createFakeTransport();
   await assert.rejects(() => setChargeLimit(transport, 'R331ABC', 150)); // > 100, out of bounds
   assert.equal(transport.sentCommands.length, 0);
+});
+
+test('setAcCharging sends a valid acChgCfg command (moduleType 5)', async () => {
+  const transport = createFakeTransport();
+  await setAcCharging(transport, 'R331ABC', { chgWatts: 600, paused: false });
+
+  const command = transport.sentCommands[0];
+  assert.equal(command.moduleType, 5);
+  assert.equal(command.operateType, 'acChgCfg');
+  assert.deepEqual(command.params, { chgWatts: 600, chgPauseFlag: 0 });
+  acChargingSettingsSchema.shape.params.parse(command.params);
 });
