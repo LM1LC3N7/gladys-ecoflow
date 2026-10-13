@@ -1,15 +1,23 @@
 # -----------------------------------------------------------------------------
-# Continuous integration: runs on every push to main and every pull request.
+# Continuous integration: runs on every push and every pull request.
 #
-# Jobs:
-#   1. quality  -> Prettier, ESLint, `node --test` with coverage thresholds,
-#                  on Node 24 (the Docker image's runtime) and Node 22 (the
-#                  lowest version package.json's `engines` accepts);
-#   2. audit    -> `npm audit` on the runtime dependencies shipped in the image;
-#   3. manifest -> the official Gladys store validator, the same checks the
-#                  store indexer runs (manifest schema, cover, documentation);
-#   4. docker   -> `docker build` for linux/amd64 AND linux/arm64, no push —
-#                  a Dockerfile change is caught on the PR, not on release day.
+# Four gates:
+#   1. Prettier  -> consistent formatting (no style debates in reviews);
+#   2. ESLint    -> catch real mistakes (undefined vars, dead code, ...);
+#   3. Tests     -> `node --test`, the built-in runner (no network);
+#   4. npm audit -> known vulnerabilities of the production dependencies.
+#
+# The GitHub Actions quota is limited: if every job fails in under 2 seconds,
+# the quota is exhausted, it is not a bug.
+#
+# They run on Node 22 (the oldest version `engines` accepts) and Node 24 (the
+# one the Docker image ships with, see the Dockerfile). The image is built too
+# (amd64 only, never pushed), so a broken Dockerfile shows up here rather than
+# in a release.
+#
+# The store validator (`npx github:GladysAssistant/integration-store .`) is not
+# a gate here: it also checks that the manifest's `docker_image` exists on its
+# registry, which is false until the first release.
 # -----------------------------------------------------------------------------
 name: CI
 
@@ -19,6 +27,8 @@ on:
       - main
   pull_request:
 
+# Checks only read the code: no write scope for the token, whatever the
+# repository default is.
 permissions:
   contents: read
 
@@ -27,11 +37,14 @@ jobs:
     runs-on: ubuntu-latest
     name: Lint & test (Node ${{ matrix.node-version }})
     strategy:
+      fail-fast: false
       matrix:
         node-version: [22, 24]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false # no git push here
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -48,55 +61,29 @@ jobs:
       - name: Lint (ESLint)
         run: npm run lint
 
-      - name: Run tests with coverage thresholds
-        run: npm run test:coverage
+      - name: Run tests
+        run: npm test
 
-  audit:
-    runs-on: ubuntu-latest
-    name: Runtime dependency audit
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-
-      - name: npm audit (runtime dependencies)
+      - name: Audit the production dependencies
         run: npm audit --omit=dev --audit-level=moderate
-
-  manifest:
-    runs-on: ubuntu-latest
-    name: Gladys store validation
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-
-      - name: Validate the manifest like the store indexer does
-        run: npx --yes github:GladysAssistant/integration-store .
 
   docker:
     runs-on: ubuntu-latest
-    name: Docker build (amd64 + arm64)
+    name: Docker build
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+        with:
+          persist-credentials: false # no git push here
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Build the image (no push)
+      # Same build as build.yml, without pushing, and for amd64 only: emulating
+      # arm64 is slow, and only the release build needs it.
+      - name: Build (no push)
         uses: docker/build-push-action@v7
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: false

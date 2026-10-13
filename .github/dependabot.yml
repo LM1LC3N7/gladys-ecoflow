@@ -1,58 +1,33 @@
 # -----------------------------------------------------------------------------
-# Dependabot version updates.
+# Dependabot: update pull requests, checked by the CI like any other.
 #
-# Opens a PR by itself when a newer version is available, for the three
-# places this repo pins a version: npm packages, the Dockerfile base image
-# (tag + digest: a rebuilt `node:24-alpine` with security fixes arrives as a
-# digest bump), and the GitHub Actions the workflows use. Every PR runs the
-# full ci.yml suite — see .github/workflows/dependabot-auto-merge.yml for
-# which of these Dependabot then merges on its own once that run is green,
-# and .github/workflows/auto-release.yml for which merges cut a release.
+#   - npm, monthly: the Gladys SDK first of all (new device categories and
+#     features arrive through it); the development tools share one PR;
+#   - GitHub Actions, monthly, all in one PR.
 #
-# `target-branch: main` keeps every PR aimed at main whatever the repository
-# default branch setting says (it pointed elsewhere when this repo started).
+# Monthly rather than weekly: every update pull request runs the CI, and the
+# GitHub Actions minutes are counted.
+#
+# The Docker base image is left out on purpose: `node:24-alpine` is a moving
+# tag, pulled fresh by every release build (latest Node 24 and Alpine patches),
+# and moving to the next Node major is a deliberate change (Dockerfile, CI
+# matrix and `engines` together).
 # -----------------------------------------------------------------------------
 version: 2
 updates:
-  - package-ecosystem: 'npm'
-    directory: '/'
-    target-branch: 'main'
+  - package-ecosystem: npm
+    directory: /
     schedule:
-      interval: 'weekly'
-    open-pull-requests-limit: 5
+      interval: monthly
     groups:
       dev-dependencies:
-        dependency-type: 'development'
-    labels:
-      - 'dependencies'
-    commit-message:
-      prefix: 'chore'
-      include: 'scope'
+        dependency-type: development
 
-  - package-ecosystem: 'docker'
-    directory: '/'
-    target-branch: 'main'
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: 'weekly'
-    # A new Node major is a deliberate change (odd majors are never LTS, and
-    # the image should follow the LTS line the Gladys core runs on): only
-    # minor/patch tags and digest updates are proposed automatically.
-    ignore:
-      - dependency-name: 'node'
-        update-types: ['version-update:semver-major']
-    labels:
-      - 'dependencies'
-    commit-message:
-      prefix: 'chore'
-      include: 'scope'
-
-  - package-ecosystem: 'github-actions'
-    directory: '/'
-    target-branch: 'main'
-    schedule:
-      interval: 'weekly'
-    labels:
-      - 'dependencies'
-    commit-message:
-      prefix: 'chore'
-      include: 'scope'
+      interval: monthly
+    groups:
+      github-actions:
+        patterns:
+          - '*'
